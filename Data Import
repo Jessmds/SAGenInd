@@ -1,1 +1,21 @@
+---
+title: "Data Import"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
 
+This notebook imports the dataset into R, does basic checks on the datase and formats it for further quality checks.
+
+## Import Kobo dataset
+```{r}
+kobo<-read.csv(file="International_Genetic_Indicator_testing_V_4.0_-_latest_version_-_False_-_2023-11-02-08-23-26.csv", sep=";", header=TRUE) %>%
+
+## add  taxon column
+mutate(taxon=(utile.tools::paste(genus, species, subspecies_variety, na.rm=TRUE))) %>%
+    # remove white space at the end of the name
+    mutate(taxon=str_trim(taxon, "right"))
+
+```
