@@ -1,7 +1,7 @@
 # South African Genetic Indicator Quantification
 This repository has been created to help facilitate the calculation of population genetic indicators for South African biodiversity assessments. The code builds upon that developed for a multinational genetic indicator study (see https://github.com/AliciaMstt/GeneticIndicators; Mastretta-Yanes, da Silva et al. 2024), but has been modified for complete taxon assessments and to generate the specific statistics and visuals needed for SA's National Biodiversity Assessment. 
 
-* Mastretta-Yanes\*, A., da Silva\*, et al. 2024. **Multinational evaluation of genetic diversity indicators for the Kunming-Montreal Global Biodiversity Monitoring framework**.  Ecology Letters 27 (7): e14461. https://doi.org/10.1111/ele.14461
+* Mastretta-Yanes\*, A., da Silva\*, et al. 2024. **Multinational evaluation of genetic diversity indicators for the Kunming-Montreal Global Biodiversity Monitoring framework**.  *Ecology Letters* 27 (7): e14461. https://doi.org/10.1111/ele.14461
 
 The code presented here was developed for **South Africa's first complete taxon assessed - Mammals**.  This work was greatly facilitated by the coordination of **Endangered Wildlife Trust**, who were responsible for the mammal's regional IUCN Red List Re-assessments. Access to experts through online workshops, emails, and more, greatly enabled the speedy collection of the necessary data on population numbers, dispersal buffers, etc. 
 
