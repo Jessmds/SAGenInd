@@ -13,9 +13,17 @@ This notebook imports the dataset into R, does basic checks on the datase and fo
 ```{r}
 kobo<-read.csv(file="Updated_GI_Collection_form_-_all_versions_-_English_en_-_2025-06-02-10-03-53", sep=";", header=TRUE) %>%
 
-## add  taxon column
-mutate(taxon=(utile.tools::paste(genus, species, subspecies_variety, na.rm=TRUE))) %>%
-    # remove white space at the end of the name
-    mutate(taxon=str_trim(taxon, "right"))
+
+## Filter out records which were marked as "not_approved" in the manual Kobo validation interface (this means country assessors determined the is something wrong with that particular record).
+
+```{r}
+# check if any species is flagged as "validation_status_not_approved"
+kobo_output %>%
+      filter(X_validation_status=="validation_status_not_approved")  %>%
+            select(country_assessment, name_assessor, taxon)
+
+# omit those records from data:
+kobo_output<- kobo_output %>%
+            filter(X_validation_status!="validation_status_not_approved")
 
 ```
