@@ -21,7 +21,11 @@ If you would like to start your own projects that can feed into this greater dat
 
 
 # 3. Modified scripts to process the kobo output and estimate the indicators
-**Note: original R code stems from https://github.com/AliciaMstt/GeneticIndicators**. The code below has been modified to suit the specific needs of this project.
+**Note: original R code stems from https://github.com/AliciaMstt/GeneticIndicators**. The code for this project has been modified to suit the specific needs of this project. It is brokwn down into various phases:
+
+1. Data Import
+2. Quality Checks
+3. 
 
 
 
