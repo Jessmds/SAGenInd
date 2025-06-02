@@ -11,15 +11,12 @@ For general information on guidance materials associated with these genetic indi
 Kobotoolbox is a free and open source tool for data collection. It allows to easily develop digital data collection forms that work on both mobile devices and web browsers. Data can be collected from different devices and people, and is accessible through the KoboToolbox interface. This data can then be downloaded into multiple formats for use in applications such as Excel, R, Phyton or GIS software.
 
 ## 2.1 Koboform:
-We built a Kobo form for collecting the needed raw data to estimate de Genetic Diversity Indicators mentioned above, as well as species taxonomic information and assessor's and country information.
+We built a Kobo form for collecting the needed raw data to estimate the Genetic Diversity Indicators mentioned above. The template for this data collection form can be accessed (link here).
 
-You can see a dummy example of how the online form looks once it is deployed in Kobo here: https://ee.kobotoolbox.org/preview/2KDHEWrb. Notice that this form is just an example and it can NOT be used to collect real data.
-
-If you want to use this form to collect data for your country or desired species, you can contact Alicia Mastretta-Yanes (amastretta@conabio.gob.mx) to get access to the data-collection form where other teams are collecting data. Alternatively you can deploy your own version of the form in Kobotoolbox as follows:
-
-Download the file (kobo_form.xlsx) from this repository, which is the .xlsx version of the Kobo form.
-Import it to Kobotoolbox following these instructions.
-Check Kobotoolbox documentation for further details on how to deploy and use it. 
+If you would like to start your own projects that can feed into this greater dataset, you can either contact DR Jessica da Silva (j.dasilva@sanbi.org.za) to gain access to the project or you can download the template file, which is the .xlsx version of the Kobo form.  
+      1. Download the existing template from this repository (link to xls).  
+      2. Import .xlsx file into Kobotoolbox following these instructions. Check Kobotoolbox documentation for further details on how to deploy and use it.
+ 
 
 # 3. Modified scripts to process the kobo output and estimate the indicators
 Note: original R code stems from https://github.com/AliciaMstt/GeneticIndicators
