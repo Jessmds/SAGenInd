@@ -1,5 +1,14 @@
 ## Once the file has been successfully imported and can be called, it is important to make sure only approved records get processed and that there are no data capture errors that would prevent data processing and analysis. 
 
+## Load required libraries:
+
+library(tidyr)
+library(dplyr)
+library(utile.tools)
+library(stringr)
+library(ggplot2)
+
+
 ## Filter out records which were marked as "not_approved" in the manual Kobo validation interface (this means something was deemed incorrect by assessors and the record should not be used in the further processing of the dataset).
 
 ```{r}
