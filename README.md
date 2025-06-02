@@ -23,8 +23,10 @@ If you would like to start your own projects that can feed into this greater dat
 # 3. Modified scripts to process the kobo output and estimate the indicators
 **Note: original R code stems from https://github.com/AliciaMstt/GeneticIndicators**. The code for this project has been modified to suit the specific needs of this project. It is brokwn down into various phases:
 
-1. Data Import
-2. Quality Checks
+1. [Data Import]()
+2. [Quality_check](https://aliciamstt.github.io/GeneticIndicators/1_quality_check.html): looks for common sources of error and flags those records manual revision by the assessors who capture data from each country. The output is a file showing the records that need manual review or corrections, if any. Raw [.Rmd file here](./1_quality_check.Rmd).
+
+* [2\_cleaning](https://aliciamstt.github.io/GeneticIndicators/2_cleaning.html): corrects the errors detected by `1_quality_check.Rmd, based on the feed back from the people who collected the data. Corrections are done within this script to ensure reproducibility. The output is a clean kobo file that can be used for analyses. [.Rmd file here](./2_cleaning.Rmd).
 3. 
 
 
