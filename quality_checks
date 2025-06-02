@@ -1,6 +1,6 @@
 ## Once the file has been successfully imported and can be called, it is important to make sure only approved records get processed and that there are no data capture errors that would prevent data processing and analysis. 
 
-Filter out records which were marked as "not_approved" in the manual Kobo validation interface (this means country assessors determined the is something wrong with that particular record).
+## Filter out records which were marked as "not_approved" in the manual Kobo validation interface (this means something was deemed incorrect by assessors and the record should not be used in the further processing of the dataset).
 
 ```{r}
 # check if any species is flagged as "validation_status_not_approved"
