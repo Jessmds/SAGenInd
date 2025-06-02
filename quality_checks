@@ -1,3 +1,12 @@
+---
+title: "Quality Checks"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
 ## Once the file has been successfully imported and can be called, it is important to make sure only approved records get processed and that there are no data capture errors that would prevent data processing and analysis. 
 
 ## Load required libraries:
