@@ -17,7 +17,7 @@ We built a Kobo form for collecting the needed raw data to estimate the Genetic 
 
 If you would like to start your own projects that can feed into this greater dataset, you can either contact Dr Jessica da Silva (j.dasilva@sanbi.org.za) to gain access to the project or **you can download the template file**, which is the .xlsx version of the Kobo form: 
 
-1. Download the existing template from [here](https://github.com/user-attachments/files/20548476/Updated.SA.Genetic.Indicator.Data.Collection.form.xlsx)
+1. Download the existing template from [here](https://github.com/Jessmds/SAGenInd/blob/main/SA-Genetic-Indicator-Data-Collection-Form.csv)
 2. Import the .xlsx file into Kobotoolbox following [these instructions](https://support.kobotoolbox.org/new_form.html). Check [Kobotoolbox documentation](https://support.kobotoolbox.org/welcome.html) for further details on how to deploy 
          and use it.
 
