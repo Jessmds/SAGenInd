@@ -11,10 +11,10 @@ For general information on guidance materials associated with these genetic indi
 ## Files in this repository
 
 Quarto document that explains the indicators, describes the Kobo-based data collection, and provides step-by-step R code for importing, quality checking, and analysing the data (PM indicator, Ne 500 indicator, and additional outputs).
-- `genetic-indicator-code-3.qmd`
+- `sa-genetic-indicator-scripts.qmd`
    
 Rendered HTML version of the Quarto document for users who prefer a web-based walkthrough.
-- `genetic-indicator-code-3.html`
+- `sa-genetic-indicator-scripts.html`
   
 Modular R scripts corresponding to the main analysis phases described in the Quarto document. 
 - `R/01_import_data.R`  
