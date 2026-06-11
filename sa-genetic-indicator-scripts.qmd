@@ -13,7 +13,7 @@ citation:
   type: webpage
   container-title: South African Genetic Indicator Scripts
   publisher: South African National Biodiversity Institute
-  url: https://jessmds.github.io/SAGenInd/
+  url: https://jessmds.github.io/SAGenInd/sa-genetic-indicator-scripts.html/
 appendix-cite-as: display
 google-scholar: true
 format: 
