@@ -1,0 +1,2920 @@
+---
+title: "South African Genetic Indicator Scripts"
+title-block-banner: "#A7A9AC"
+title-block-banner-color: white
+author:
+  - name: da Silva, Jessica M.
+    orcid: 0000-0001-8385-1166
+    affiliation:
+     - South African National Biodiversity Institute
+     - University of Johannesburg
+date: last-modified
+citation:
+  type: webpage
+  container-title: South African Genetic Indicator Scripts
+  publisher: South African National Biodiversity Institute
+  url: https://jessmds.github.io/SAGenInd/sa-genetic-indicator-scripts.html
+appendix-cite-as: display
+google-scholar: true
+format: 
+  html:
+    crossref:
+      fig-prefix: Figure
+      tbl-prefix: Table
+      ref-hyperlink: true
+      fig-labels: arabic
+      tbl-labels: arabic
+      subref-labels: alpha a
+      title-delim: "."
+    toc: true
+    toc-location: right
+    toc-depth: 4
+    toc-expand: true
+    theme: 
+      - default 
+      - custom.scss
+language:
+  section-title-footnotes: Notes
+  section-title-citation: Recommended citation
+footnotes-hover: true
+reference-location: document
+link-external-newwindow: true
+bibliography: references.bib
+csl: annals-of-the-new-york-academy-of-sciences.csl
+callout-icon: false
+execute:
+  echo: true 
+  warning: false 
+  message: false
+---
+
+------------------------------------------------------------------------
+
+This page has been created to help facilitate the calculation of population genetic indicators for South African biodiversity assessments. The code builds upon that developed for a multinational genetic indicator study (see https://github.com/AliciaMstt/GeneticIndicators; [@mastretta2024]), but has been modified for **complete taxon assessments** and to generate the specific statistics and visuals needed for SA's National Biodiversity Assessment.
+
+The code presented here was developed for **South Africa's first complete taxon assessed - mammals**. This data collection phase of this project was greatly facilitated by the coordination of **Endangered Wildlife Trust**, who were responsible for the mammal regional IUCN Red List Re-assessments in 2025. Access to experts through online workshops, emails, and more, greatly enabled the speedy collection of the necessary data on population numbers, dispersal buffers, etc.
+
+For general information and guidance materials associated with the genetic indicators used here, please refer to **https://ccgenetics.github.io/guidelines-genetic-diversity-indicators/**.
+
+## About the Genetic Indicators
+
+To help assess the genetic health of species and their populations, genetic diversity EBVS (ref) and indicators (ref) have been developed. Two indicators have been adopted into the Convention of Biological Diversity's Global Monitoring Framework (ref 15/5). They are:
+
+*Headline Indicator (Goal A, Target 4)*: **Proportion of populations within an effective population size (Ne) greater than 500** - otherwise known as the **Ne 500 indicator**
+
+*Complementary Indicator (Target 4)*: **Proportion of populations maintained within species -** otherwise known as the **PM Indicator**
+
+
+## Online data collection form using Kobotoolbox
+
+Kobotoolbox is a free and open source tool for data collection and was the main platform used to capture the information used in the pilot genetic indicator study by Mastretta-Yanes et al.(2024).
+
+### Kobo Form
+
+A Kobo form was modified from [this multinational study template](https://github.com/AliciaMstt/GeneticIndicators/raw/main/kobo_form.xlsx) to meet the needs and analyses of this national project.
+
+If you would like to start your own projects that can feed into this greater dataset, you can either contact Dr Jessica da Silva ([j.dasilva\@sanbi.org.za](j.dasilva@sanbi.org.za)) to gain access to the project or you can download the template file, which is the .xlsx version of the Kobo form.
+
+1.  Download the **current South African specific template** of this data collection form [here](https://github.com/user-attachments/files/20548476/Updated.SA.Genetic.Indicator.Data.Collection.form.xlsx).
+2.  Import the .xlsx file into Kobotoolbox Check [Kobotoolbox documentation](https://support.kobotoolbox.org/welcome.html) for further details on how to deploy and use it.
+
+## Genetic Indicator Scripts
+
+Once all data have been entered, a series of code can be employed to process the data.
+
+The code for this project has been heavily modified from **https://github.com/AliciaMstt/GeneticIndicators** to suit the specific needs of this project.
+
+Data processing has been carried out through the following phases:
+
+1.  **Data Export and Import:**
+
+2.  **Quality Checks:** looks for errors and flags the potential problematic records for manual inspection. An output .csv file off all errors is generated to easily share and simplify the potential problems with the assessors who compiled the information.
+
+3.  **Calculating the PM indicator:**
+
+4.  **Ne 500 Indicator calculation**
+
+5.  Red List comparisons
+
+## 1. Data Export and Import
+
+### 1.1 Downoading the data from Kobo
+
+Once all the data has been compiled, it will need to be downloaded for use in R. It is imperative the data are downloaded as a **.csv file** with the "values and headers" provided in **XML format**. This will streamline and simplify column recall. Otherwise several errors will prevent the functioning of the code.
+
+### 1.2 Importing the Kobo Dataset into R
+
+Once the dataset has been downloaded, it must be imported into R. Please ensure the .csv file is saved in the same directory as this file/script. Please ensure all relevant libraries are installed at the outset. `dplyr` is used extensively to streamline coding.
+
+```{r}
+getwd()
+
+#Remember to input latest file name
+kobo<-read.csv(file="updated-sa-gi-data-2026-02-20.csv", sep=";", header=TRUE)
+
+#### Load required libraries. 
+
+library(tidyr)
+library(dplyr)
+library(utile.tools)
+library(stringr)
+library(ggplot2)
+library(knitr)
+library(tibble)
+library(rstatix)
+
+```
+### 1.3 Verify records are being read correctly
+Explore the dataset to make sure it has loaded properly.
+
+```{r}
+#Verify details of the dataset
+
+ncol(kobo)
+nrow(kobo)
+#head(kobo)
+```
+
+```{r}
+##Verify key fields to make sure data exists in all records
+
+kobo %>%
+  filter(if_any(
+    c(genus, species, Taxonomic_Order),
+    ~ is.na(.) | str_trim(.) == "")
+  ) %>%
+  select(genus, species, Taxonomic_Order)
+
+
+```
+
+```{r}
+#Count how many records are missing
+kobo %>%
+  summarise(
+    missing_genus         = sum(is.na(genus) | str_trim(genus) == ""),
+    missing_species       = sum(is.na(species) | str_trim(species) == ""),
+    missing_order         = sum(is.na(Taxonomic_Order) | str_trim(Taxonomic_Order) == "")
+  )
+```
+### 1.4 Filter out records which were marked as "not_approved"
+
+In Kobo, it is possible to 'validate' records as a means of approving their quality. Conversely, invalidated records may be deemed spurious or questionable. The project lead has therefore flagged these records.
+
+1.  Check if any species are flagged as "validation_status_not_approved":
+
+```{r}
+kobo %>% 
+  filter(X_validation_status=="validation_status_not_approved") %>% 
+    select(genus, species, subspecies_variety)
+
+```
+
+2.  Omit any invalidated records from the data set. A new dataset is created with only validated records.
+
+```{r}
+kobo.1 <- kobo %>% 
+   filter(taxonomic_group == "mammal") %>%   # keep only Mammals
+  filter(X_validation_status!="validation_status_not_approved")
+
+nrow(kobo.1)
+```
+
+### 1.4 Create a new dataset with a taxon column and an endemism column.
+
+#### 1.4.1 New taxon column
+In the Kobo form names such as genus, species, and subspecies each received their own column. To help facilitate easy recall for quality checks, we add a new column at the end of the data set that combines those there components of the scientific name (genus, species and subspecies). A new dataset is then created with this new column.
+
+```{r}
+kobo.1b <- kobo.1 %>%
+  mutate(
+    taxon = str_trim(utile.tools::paste(genus, species, subspecies_variety, na.rm = TRUE), "right")
+  )
+
+kobo.1b %>%
+  select(taxonomic_group,genus, species, subspecies_variety, taxon) %>%
+  head()
+  
+ 
+
+
+```
+
+#### 1.4.2 New endemism column
+Adding an endemism column. This is because there are two questions that relate to endemism and we want to consolidate them. The first is in Section 5, inquiring about whether populations are transboundary or not, and the second is Section 6 where data only exists for the species as a whole and whether the species is endemic or not. Sections 5 and 6 are never reported together so a new column to represent the residency status for each taxa needs to be created.
+```{r}
+kobo.2 <- kobo.1b %>%
+  rowwise() %>%
+  mutate(endemic_status = case_when(
+    # Species-level info
+    popsize_data == "data_for_species" & national_endemic == "yes" ~ "endemic",
+    popsize_data == "data_for_species" & national_endemic == "no"  ~ "non_endemic",
+
+    # Population-level info
+    popsize_data == "yes" & any(c_across(num_range("transboundary_pop", 1:25)) == "yes_transboundary", na.rm = TRUE) ~ "non_endemic",
+    popsize_data == "yes" & !any(c_across(num_range("transboundary_pop", 1:25)) == "yes_transboundary", na.rm = TRUE) &
+                            any(c_across(num_range("transboundary_pop", 1:25)) == "no_restricted", na.rm = TRUE) ~ "endemic",
+
+
+    # Insufficient info - will ask the specific question when no census associated questions are asked
+    sa_endemic == "yes" ~ "endemic",
+    sa_endemic == "no" ~ "non_endemic",
+    
+    # Catch-all (optional)
+    TRUE ~ NA_character_
+  )) %>%
+  ungroup()
+
+kobo.2 %>%
+  count(endemic_status)
+```
+List taxa with NA
+```{r}
+#check the addition was done correctly
+endemism_status <- kobo.2 %>%
+  filter(is.na(endemic_status)) %>%
+  select(taxon, endemic_status)
+endemism_status
+
+```
+## 2. Quality Checks
+
+Once confirmation is received that the file is being read correctly, various quality checks must be performed to ensure no data is being excluded due to incorrect formatting, etc.
+
+### 2.1 Check for common data capture errors
+
+#### 2.1.1 Unknown data numerical Typos
+
+##### 2.1.1.1 Converting -999 to NA
+
+In the Kobo form, -999 was used to mark records as unknown for numerical data entries. This was used because answering the question was mandatory, so leaving it blank wasn't possible. We have to change -999 to NA.
+
+```{r}
+# Convert special Kobo codes (-999) to NA
+kobo.3<-kobo.2 %>%
+mutate(
+    n_extant_populations  = na_if(as.integer(n_extant_populations), -999),
+    n_extinct_populations = na_if(as.integer(n_extinct_populations), -999),
+    n_hist_pops           = na_if(as.integer(n_hist_pops), -999)
+  ) %>%
+
+  # Trim whitespace across all character fields
+  mutate(across(where(is.character), ~ str_trim(.))) %>%
+
+  # Turn empty strings into proper NA
+  mutate(across(where(is.character), ~ na_if(., ""))) 
+  
+```
+
+#####2.1.1.2 Reporting 999 instead of -999
+
+It is possible some taxa have 999 as the number of extant or extinct populations noted, when this is likely a typo from -999 (unknown). The following code shows which species (if any) have 999 as the number of populations
+
+```{r}
+
+check_n_pops <- kobo.3 %>%
+  filter(n_extant_populations < 0 |
+         n_extant_populations == 0 | 
+         n_hist_pops == 0 |
+         n_extant_populations == 999 | 
+         n_extinct_populations == 999 |
+         n_hist_pops == 999) %>%
+  mutate(issue = "Check population numbers (e.g. 0 or 999 may be incorrect)")  %>%
+  select(taxon, n_extant_populations, n_extinct_populations, n_hist_pops, issue)
+
+check_n_pops
+```
+### 2.2 Identifying blank fields in records
+
+```{r}
+#Looks for blank fields in various columns and that could impact downstream analysis
+
+required_fields <- c(
+  "taxon", "Taxonomic_Order", "n_extant_populations", "n_extinct_populations", "realm",
+  "national_endemic", "Previous_National_Red_List_Category", "Current_National_Red_List_Category", "IUCN_habitat", "species_range"
+)
+
+missing_info <- kobo.3 %>%
+  filter(if_any(all_of(required_fields), ~ is.na(.))) %>%
+  mutate(issue = "Missing value in population information") %>%
+  select(taxon, all_of(required_fields), issue)
+
+head(missing_info)
+
+```
+
+### 2.3 Scientific names
+
+Genus, species and subspecies should each be a single word, check if there are cases where this is not the case. The only exception would be "var." or "subsp." in the subspecies_variety field.
+
+<!--# Need to verify how subpopulation assessments were entered. Will they be picked up with the following check? Is it necessary?-->
+
+**Group all species with possible name errors together for fact checking**
+
+```{r}
+check_taxon_names <- kobo.3 %>% 
+  filter(grepl(" ", genus) | 
+         grepl(" ", species) | 
+         grepl(" ", subspecies_variety)) %>%
+   filter(!grepl("var.", subspecies_variety)) %>%
+   filter(!grepl("subsp.", subspecies_variety)) %>%
+   mutate(issue = "Check name format. More than 2 words") %>%
+  select(genus, species, subspecies_variety, taxon, issue)
+
+check_taxon_names
+```
+
+### 2.4 Population information
+#### 2.4.1 How populations are defined - Other
+
+Filter for rows where an 'other' explaining how populations have been defined. Then create a .csv file so that these records can be queried with assessors to see if they can be redefined into one or more of the existing categories.
+
+```{r}
+dp_other_comments <- kobo.3 %>%
+  filter(defined_populations == "other" & !is.na(source_definition_populations) & source_definition_populations != "") %>%
+  mutate(issue = "Other population def. Review explanation") %>%
+  select(taxon, defined_populations, source_definition_populations, issue)
+
+head(dp_other_comments)
+```
+
+#### 2.4.2 Number of populations
+
+To calculate the PM indicator, data must exist for **extant** and **extinct** populations. Let's explore these data.
+
+We want to identify if there are any unusual values that may indicate errors (e.g., very large numbers of populations, no populations, NAs).
+
+```{r}
+sum_extant <- summary(kobo.3$n_extant_populations)
+sum_extant 
+```
+
+We can also plot this distribution to help quickly identify if anything is unusual (e.g. very large numbers of populations or no populations).
+
+```{r}
+#Displays barplot showing the number of species with varying numbers of extant populations 
+ggplot(kobo.3, aes(x=n_extant_populations))+       
+  geom_histogram()
+```
+
+
+```{r}
+sum_extinct<-summary(kobo.2$n_extinct_populations)
+sum_extinct 
+```
+
+```{r}
+
+#Displays barplot showing the number of species with varying numbers of extant populations
+
+ggplot(kobo.3, aes(x=n_extinct_populations))+
+geom_histogram()
+```
+
+```{r}
+# Create a tidy summary data frame manually
+pop_summary <- tibble::tibble(
+  Type = c("Total", "Mean", "Total", "Mean"),
+  Population = c("Extant", "Extant", "Extinct", "Extinct"),
+  Value = c(
+    sum(kobo.3$n_extant_populations, na.rm = TRUE),
+    mean(kobo.3$n_extant_populations, na.rm = TRUE),
+    sum(kobo.3$n_extinct_populations, na.rm = TRUE),
+    mean(kobo.3$n_extinct_populations, na.rm = TRUE)
+  )
+)
+
+# Pivot for boxplot
+kobo_long <- kobo.3 %>%
+  select(n_extant_populations, n_extinct_populations) %>%
+  pivot_longer(everything(), names_to = "Population_Type", values_to = "Count")
+
+ggplot(kobo_long, aes(x = Population_Type, y = Count)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(title = "Distribution of Population Counts", y = "Count", x = "Type") +
+  theme_minimal()
+```
+
+Overall summary stats for extant and extinct populations.
+
+```{r}
+pop_summary %>%
+  pivot_wider(names_from = Type, values_from = Value) %>%
+  kable(caption = "Summary Statistics for Extant and Extinct Populations")
+
+#504 extant, 13 extinct
+```
+
+#### 2.4.3 Resolving NAs
+
+Any unknowns (NAs) will prevent the calculation of the indicator, so we want to double check if we can resolve any potential NAs.
+
+Total records with NA in **extant** populations:
+
+```{r}
+
+extant_NA <- kobo.3 %>%
+  filter(is.na(n_extant_populations)) %>%
+  # add a column stating what needs to be checked
+  mutate(issue = "Why is extant pops NA?") %>%
+  select(taxon, n_extant_populations, issue)
+
+head(extant_NA)
+```
+
+Specifically for **extinct** populations, unless specifically known, this field would be noted as 0, at least for these initial assessments. This is because it is not possible to every know what we do not know, but to monitor change we need to set a baseline. As per CBD, if a baseline is not explicitly known, then now is considered the starting point (get ref). Hence if we do not know what happened in the past, our baseline becomes the present.
+
+Total taxa with NA in **extinct** populations:
+
+```{r}
+extinct_NA <- kobo.3 %>%
+  filter(is.na(n_extinct_populations)) %>%
+  # add a column stating what needs to be checked
+  mutate(issue = "Why is extinct pops NA?") %>%
+  select(taxon, n_extinct_populations, issue)
+
+extinct_NA
+```
+
+**Taxa with zero extant populations**
+
+The following code will show which taxa (if any) have 0 (zero) extant populations noted. In other words, they are nationally Extinct. This must simply be verified to ensure this wasn't a typo.
+
+```{r}
+kobo.3 %>%   
+filter(n_extant_populations==0) %>%          
+  select(taxon, n_extant_populations, n_extinct_populations)
+```
+
+**Taxa with extinct populations**
+
+The above shows extinct species, but the following code will show which taxa (if any) have extinct populations. What were considered extinct species previously, may now be considered as extinct subspecies or populations based on more recent molecular investigations of historical samples. This could is therefore just checking that these populations have been accounted for.
+
+```{r}
+extinct_pop <- kobo.3 %>%
+  filter(n_extinct_populations > 0) %>%
+  mutate(issue = "Extinct populations present. Confirm if valid") %>%
+  select(taxon, common_name, n_extinct_populations, issue) 
+
+head(extinct_pop)
+```
+
+**Taxa with differences in historical and current population numbers**
+
+```{r}
+unique(kobo.3$diff_historical_pop)
+
+kobo.3 %>%
+  filter(diff_historical_pop=="yes") %>%
+  select(taxon, genus, species, subspecies_variety, Taxonomic_Order, n_extant_populations, n_extinct_populations, n_hist_pops, realm, national_endemic, Previous_National_Red_List_Category, Current_National_Red_List_Category,
+  IUCN_habitat, species_range) %>%
+head()
+```
+
+```{r}
+##Numerical summary of taxa with or without population differences
+table(tolower(kobo.3$diff_historical_pop))
+```
+
+
+```{r}
+#Which taxa show increased number of populations now?
+kobo.3 %>%
+  filter(diff_historical_pop == "yes" & n_hist_pops < n_extant_populations) %>%
+  select(taxon, Taxonomic_Order, n_extant_populations, n_extinct_populations, n_hist_pops, realm, national_endemic,
+    Previous_National_Red_List_Category, Current_National_Red_List_Category,
+    IUCN_habitat, species_range
+  ) %>%
+  head()
+
+```
+
+#### 2.4.3 Population size data checks
+
+*How does the data look*
+
+Of the taxa that have population size data, what kind of data is it? Effective population size (Ne), Census as a point estimate (Nc-point) or Census as a broad range (Nc-range)
+
+```{r}
+unique(kobo.3$popsize_data) # Preview values in popsize_data. Confirm levels and spelling of response. 
+```
+
+```{r}
+#Check how many rows match popsize_data == "yes"
+kobo.3 %>%
+  filter(tolower(popsize_data) == "yes") %>%
+  nrow()
+```
+
+```{r}
+#Preview ne_pops_exists and nc_pops_exists values
+kobo.3 %>%
+  filter(tolower(popsize_data) == "yes") %>%
+  select(ne_pops_exists, nc_pops_exists) %>%
+  distinct()
+```
+
+##### 2.4.3.1 Unusual population size values
+Check to see what combinations of population size data exist. Some unusual results would be high values for Ne + Nc, Ne only, or low to no values of Nc data compared to Ne data, as Ne data is generally limited.
+
+```{r}
+##Standardize the fields
+psize_data <- kobo.3 %>%
+  filter(tolower(popsize_data) == "yes") %>%   # Only taxa with any pop size data
+  mutate(
+    ne_clean = tolower(trimws(ne_pops_exists)),
+    nc_clean = tolower(trimws(nc_pops_exists))
+  )
+
+##Assign nc/nc per population row
+kobo_flagged <- psize_data %>%
+  mutate(
+    has_ne = ne_clean == "ne_available",
+    has_nc = nc_clean == "yes"
+  )
+
+taxon_summary <- kobo_flagged %>%
+  group_by(taxon) %>%
+  summarise(
+    any_ne = any(has_ne, na.rm = TRUE),
+    any_nc = any(has_nc, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    data_combination = case_when(
+      any_ne & any_nc ~ "ne + nc",
+      any_ne & !any_nc ~ "ne only",
+      !any_ne & any_nc ~ "nc only",
+      TRUE ~ "no ne/nc data"
+    )
+  )
+
+taxon_summary %>%
+  count(data_combination)
+```
+
+```{r}
+#Checks:
+
+unique(tolower(kobo.3$popsize_data))
+
+kobo.3 %>% 
+  filter(grepl("yes", popsize_data, ignore.case = TRUE)) %>%
+  count(ne_pops_exists, nc_pops_exists)
+
+```
+##### 2.4.3.2 Converting -999 to NA
+
+```{r}
+#Recall what the data looks like in the ne_pops_exists column
+head(kobo.3$ne_pops_exists)
+
+```
+
+```{r}
+# Get all unique Ne values from all 25 population columns
+ne_cols <- paste0("Ne_pop", 1:25)
+```
+
+```{r}
+#filter for records where ne data is available
+kobo.3 %>%
+  filter(tolower(ne_pops_exists) == "ne_available") %>%
+  select(taxon, starts_with("Ne_pop"))
+```
+
+The Ne data contains -999 values which should be converted to NA.
+
+```{r}
+# Step 1: Identify Ne_pop columns. 
+ne_pop_cols <- names(kobo.3)[grepl("^Ne_pop", names(kobo.3))]
+
+# Step 2: Convert columns from character to numeric and replace -999 with NA.
+kobo.3[ne_pop_cols] <- lapply(kobo.3[ne_pop_cols], function(x) {
+  x <- as.numeric(x)
+  x[x == -999] <- NA
+  return(x)
+})
+
+#Verify whether any -999 remain
+summary(kobo.3[ne_pop_cols])
+```
+### 2.5 Compile all errors in a single for assessors to review
+
+This code will generate a .csv file that can be sent to others for manual error checking. Note: `full_join` only takes two dataframes at a time; therefore we needed to link them with %\>%. To minimize user involvement, everytime this code is run the saved .csv file will automatically insert the date it is created. This is to facilitate version control.
+
+```{r}
+# Combine all issue check data frames using full_join
+#Remember to add full_join for all issues you want to be included in this file.
+info_to_check <- check_n_pops %>%
+  full_join(check_taxon_names) %>%
+  full_join(missing_info) %>%
+  full_join(dp_other_comments) %>%
+  full_join(extinct_pop) %>%
+  full_join(extant_NA) %>%
+  full_join(extinct_NA) %>%
+  # Keep only selected columns
+  select(taxon, issue)
+
+```
+
+### 2.6 Passed Quality Checks
+
+The above steps should be repeated when until all potential errors have been resolved. When all Quality Checks pass, convert the dataframe name to indicate its clean status.
+
+```{r}
+kobo.cleaned<-kobo.3 
+```
+
+## 3. Exploring the data
+
+### 3.1 Data Availability
+
+#### 3.1.1 Taxon Assessment Level (species, subspecies, subpopulation)
+
+IUCN Red List assessments may be done at the species, subspecies and subpopulation level. It would be good to get a breakdown of the number of assessment at each level. <!--# Need some way of differentiating subspecies and subpopulations-->
+
+```{r}
+kobo.cleaned %>%
+  mutate(level = ifelse(!is.na(subspecies_variety) & subspecies_variety != "", "subspecies", "species")) %>%
+  count(level, name = "n") %>%
+  kable()
+```
+List the names of subspecies:
+```{r}
+kobo.cleaned %>%
+  filter(!is.na(subspecies_variety)) %>%
+  select(taxon, common_name)
+```
+
+Number of species where number of population was unknown and hence pm could not be calculated.
+
+```{r}
+taxon_na_summary <- kobo.cleaned %>%
+  mutate(
+    has_missing = if_else(
+      is.na(n_extinct_populations) | is.na(n_extant_populations),
+      "Missing data",
+      "Complete data"
+    )
+  ) %>%
+  distinct(taxon, has_missing) %>%  # Avoid counting same taxon multiple times
+  count(has_missing) %>%
+  mutate(
+    proportion = n / sum(n)  # calculate proportion
+  )
+
+taxon_na_summary
+##View(taxon_na_summary) #Use if above doesn't show numbers in full; 308 complete; 12 missing
+
+
+```
+
+To view a list of the taxon with complete data.
+```{r}
+complete_taxa <- kobo.cleaned %>%
+  mutate(
+    has_missing = if_else(
+      is.na(n_extinct_populations) | is.na(n_extant_populations),
+      "Missing data",
+      "Complete data"
+    )
+  ) %>%
+  filter(has_missing == "Complete data") %>%
+  distinct(taxon) %>%
+  arrange(taxon)
+
+complete_taxa
+```
+
+
+Visualise the proportion of taxa with number of population info.
+
+```{r}
+ggplot(taxon_na_summary, aes(x = "", y = n, fill = has_missing)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Proportion of Taxa with Population Data") +
+  theme_void() +
+  scale_fill_manual(values = c("Complete data" = "#4CAF50", "Missing data" = "#F44336"))
+```
+
+#### 3.1.2 How Populations are Defined
+
+A question in the Kobo form asks to select all methods used to define populations. One or more of the following categories could be selected:
+
+-   genetic_clusters
+
+-   geographic_boundaries
+
+-   eco_biogeo_proxies
+
+-   adaptive_traits
+
+-   management_units
+
+-   other
+
+Any combination of the list above is possible, as noted in the following frequency table:
+
+```{r}
+
+kobo.cleaned %>% 
+  count(defined_populations, name = "n") %>%
+  mutate(defined_populations = substr(defined_populations, 1, 50)) %>%
+  
+# show only first 50 characters as the column width is too long
+  select(defined_populations, n) %>%
+  arrange(desc(n)) %>%
+  kable()
+```
+
+Note: Other classifications should have been checked in [2.2.2 Extant and extinct populations], so any remaining Other should be accepted as not being able to group into any other category.
+
+It is hard to group the above methods, so we will keep the original groups with n \>=10 in the above list, and tag the combinations that appear few times as as "other_combinations". N\>=10 is fairly arbitrary. As more records are accumulated, the might need to be increased. The multinational study filtered at n\>=15.
+
+*Which groups have n>=10?*
+
+```{r}
+# Step 1: Count and truncate 
+defined_pops_summary <- kobo.cleaned %>%  
+  count(defined_populations, name = "n") %>%   
+  mutate(defined_populations = substr(defined_populations, 1, 50)) 
+
+# Step 2: Filter high-frequency responses 
+top_defined <- defined_pops_summary %>%   
+  filter(n >= 15)  
+
+# Step 3: Group lower-frequency responses as "other_combinations" 
+other_combination <- defined_pops_summary %>%  
+  filter(n < 15) %>%   
+  summarise(defined_populations = "other_combinations",n = sum(n))  
+
+# Step 4: Combine results and order 
+popdef_summary <- bind_rows(top_defined, other_combination) %>%
+  arrange(desc(n)) 
+
+# Step 5: Display 
+popdef_summary %>%   
+  kable()
+```
+
+#### 3.1.3 Population Size
+
+##### 3.1.3.1 Data available for species, population or no data exists
+
+Let's look at the kind of population size data are available. The summary below shows the number of taxa that have data available for **populations**, the **species as a whole**, or **no data** is available.
+
+```{r}
+# check NAs
+summary(as.factor(kobo.cleaned$popsize_data))
+
+```
+
+Re-order `popsize_data` to have "insufficient data" at the end in the plots
+
+```{r}
+# Set factor levels
+kobo.cleaned$popsize_data<-factor(
+  kobo.cleaned$popsize_data, 
+  levels= c("insuff_data_species", "data_for_species","yes")
+  )
+
+```
+
+To visualise as a barplot:
+
+```{r}
+# Create plot
+ggplot(kobo.cleaned, aes(x = popsize_data, fill = popsize_data)) +
+  geom_bar(color = "white") +
+  scale_fill_manual(
+    values = c("grey80", "#1f77b4", "#2ca02c"),
+    labels = c("Insufficient data", "Species-level data", "Population-level data")
+  ) +
+  labs(
+    x = "Population size data availability",
+    y = "Number of taxa",
+    fill = ""
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+To visualise as a donut plot:
+
+```{r}
+# Prepare data: count by popsize_data
+popsize_counts <- kobo.cleaned %>%
+  count(popsize_data) %>%
+  mutate(
+    percent = round(n / sum(n) * 100, 1),
+    label = paste0(percent, "%")
+  )
+
+# Factor levels for consistent ordering
+popsize_counts$popsize_data <- factor(
+  popsize_counts$popsize_data,
+  levels = c("insuff_data_species", "data_for_species", "yes")
+)
+
+# Create donut plot
+data_avail <-ggplot(popsize_counts, aes(x = 2, y = n, fill = popsize_data)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  xlim(0.5, 2.5) +  # creates the donut hole
+  geom_text(aes(label = label), 
+            position = position_stack(vjust = 0.5), 
+            color = "white", size = 5) +
+  scale_fill_manual(
+    values = c("grey80", "#1f77b4", "#2ca02c"),
+    labels = c("Insufficient data", "Species-level data", "Population-level data")
+  ) +
+  labs(
+    fill = "Population size data availability",
+    title = NULL
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold")
+  )
+#To save figure
+ggsave(
+  filename = "Donut_Available_Pop_Data.png",
+  plot = data_avail,
+  width = 7,
+  height = 4.5,
+  dpi = 300
+)
+
+##for final figure submission
+ggsave(
+  filename = "Donut_Available_Pop_Data.pdf",
+  plot = data_avail,
+  width = 7,
+  height = 4.5
+)
+
+ggsave("Donut_Available_Pop_Data.pdf", width = 31, height = 25 , units = "cm")
+```
+
+
+```{r}
+#Preview ne_pops_exists and nc_pops_exists values 
+kobo.cleaned %>%   filter(tolower(popsize_data) == "yes") %>%   
+  select(ne_pops_exists, nc_pops_exists) %>%   
+  distinct()
+```
+
+Check to see what combinations of population size data exist. Some unusual results would be high values for Ne + Nc, Ne only, or low to no values of Nc data compared to Ne data, as Ne data is generally limited.
+
+```{r}
+ps_data <- kobo.cleaned %>%
+  filter(tolower(popsize_data) == "yes") %>%   # Only taxa with any pop size data
+  mutate(
+    ne_clean = tolower(trimws(ne_pops_exists)),
+    nc_clean = tolower(trimws(nc_pops_exists))
+  )
+
+##Assign nc/nc per population row
+kobo_flagged <- ps_data %>%
+  mutate(
+    has_ne = ne_clean == "ne_available",
+    has_nc = nc_clean == "yes"
+ 
+ )
+
+ps_summary <- kobo_flagged %>%
+  group_by(taxon) %>%
+  summarise(
+    any_ne = any(has_ne, na.rm = TRUE),
+    any_nc = any(has_nc, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    data_combination = case_when(
+      any_ne & any_nc ~ "ne + nc",
+      any_ne & !any_nc ~ "ne only",
+      !any_ne & any_nc ~ "nc only",
+      TRUE ~ "no ne/nc data"
+    )
+  )
+
+ps_summary %>%
+  count(data_combination)
+```
+
+**Nc** 
+Of the population census size (Nc) data, is census based on point estimates or broad ranges (e.g., 1000-10000, greater than 5000)?
+
+```{r}
+# Filter for taxa where Nc data is available
+nc_data <- kobo.cleaned %>%
+  filter(tolower(nc_pops_exists) == "yes")
+
+```
+
+```{r}
+# Get all unique NcType values from all 25 columns
+nc_type_cols <- paste0("NcType_pop", 1:25)
+```
+
+```{r}
+# Check how the data looks for NcType
+kobo.cleaned %>%
+  filter(tolower(nc_pops_exists) == "yes") %>%
+  select(taxon, starts_with("NcType_Pop")) %>%
+  head()
+```
+
+```{r}
+
+##Counts populations with Nc data
+
+# Adjust the values to match what you observe
+nc_tally <- kobo.cleaned %>%
+  filter(tolower(nc_pops_exists) == "yes") %>%
+  select(all_of(nc_type_cols)) %>%
+  pivot_longer(cols = everything(), names_to = "population", values_to = "NcType") %>%
+  filter(!is.na(NcType) & NcType != "") %>%
+  count(NcType, sort = TRUE)
+nc_tally
+
+# Code above will count any non-empty value in NcType_Pop fields, even if they're inconsistent. If unknown is noted, that means the population actually has no census information, but other populations in that species do. So Unknown should be removed from visuals.
+
+#### Need to exclude the unknowns for all plots and calculations
+```
+
+```{r}
+##Lists all taxa ad populations with census data (unknowns included)
+nc_types_list <- kobo.cleaned %>%
+  filter(tolower(nc_pops_exists) == "yes") %>%
+  select(taxon, all_of(nc_type_cols)) %>%
+  pivot_longer(
+    cols = all_of(nc_type_cols), 
+    names_to = "population", 
+    values_to = "NcType"
+  ) %>%
+  filter(!is.na(NcType) & NcType != "") %>%
+  mutate(pop = as.integer(gsub("NcType_pop", "", population))) %>%
+  select(taxon, pop, NcType)
+```
+
+Count how many taxa have at least one population of each type.
+
+```{r}
+nc_types_list %>%
+  distinct(taxon, NcType) %>%
+  count(NcType, name = "unique_taxa_count") %>%
+  arrange(desc(unique_taxa_count))
+```
+
+```{r}
+taxa_nc_duplicates <- nc_types_list %>%
+  distinct(taxon, NcType) %>%
+  add_count(taxon) %>%
+  filter(n > 1) %>%
+  arrange(taxon)
+
+taxa_nc_duplicates
+
+##check: Only showing unknowns as the duplicates
+```
+
+```{r}
+#Are there taxa with Nc_range and Nc_point?
+taxa_nc <- nc_types_list %>%
+  distinct(taxon, NcType)
+
+# Then find taxa that have both Nc_range and Nc_point
+taxa_with_both <- taxa_nc %>%
+  filter(NcType %in% c("Nc_range", "Nc_point")) %>%
+  group_by(taxon) %>%
+  summarise(n_types = n_distinct(NcType), .groups = "drop") %>%
+  filter(n_types == 2)
+
+# Optional: see which ones they are
+taxa_with_both_names <- taxa_with_both$taxon
+
+# If you want the full rows for those taxa
+taxa_nc %>%
+  filter(taxon %in% taxa_with_both_names)
+
+#Check: reports no common taxa with Nc_range and Nc_point
+
+```
+
+```{r}
+##Lists the number of taxa overall with census data.
+taxa_nc <- nc_types_list %>%
+  distinct(taxon, NcType) %>%
+  arrange(taxon)
+taxa_nc
+##lists 139 taxa with census data, but they are not unique. Includes Nc_point (121), Nc_range (12), and unknown (6). 
+```
+
+```{r}
+#Summary of above.
+
+taxa_census <- kobo.cleaned %>%
+  filter(tolower(nc_pops_exists) == "yes") %>%
+  select(taxon, all_of(nc_type_cols)) %>%
+  pivot_longer(cols = starts_with("NcType_Pop"), values_to = "NcType") %>%
+  filter(!is.na(NcType) & NcType != "") %>%
+  distinct(taxon, NcType) %>%
+  count(NcType, sort = TRUE)
+
+taxa_census
+```
+As a check, I want to make sure that all unknowns do not have unique taxa compared to the list for Nc_range and Nc_point. This could impact on stats and downstream analyses.For example, 
+there is a discrepancy in taxa with Pop size data available (97) and the number listed in Section 5 (93).These should be populations where Nc data is available for other populations in the taxon. Hence there should be no unique values for unknown compared to the other Nc Type. If so this needs to be corrected. This might not resolve all inconsistencies, but is a good start.
+
+```{r}
+#CReate separate dataframes for each NcType
+nc_range_taxa <- taxa_nc %>% filter(NcType == "Nc_range") %>% select(taxon)
+nc_point_taxa <- taxa_nc %>% filter(NcType == "Nc_point") %>% select(taxon)
+unknown_taxa  <- taxa_nc %>% filter(NcType == "unknown")  %>% select(taxon)
+```
+
+```{r}
+#Taxa common to Nc_range and Nc_point:
+common_range_point <- inner_join(nc_range_taxa, nc_point_taxa, by = "taxon")
+common_range_point
+```
+
+```{r}
+#Taxa unique to Nc_range (not in Nc_point):
+unique_range <- anti_join(nc_range_taxa, nc_point_taxa, by = "taxon")
+unique_range
+```
+
+```{r}
+#Taxa unique to unknown (not in either Nc_range or Nc_point):
+#Taxa with Nc of some type
+known_taxa <- bind_rows(nc_range_taxa, nc_point_taxa) %>% distinct()
+known_taxa 
+#134 in total. With 121 unique for range, this suggests 12 are for Nc_point. Matches table.
+```
+
+```{r}
+#Lists taxa unique to unknown. This should be 0, if not it needs to be corrected.
+unique_unknown <- anti_join(unknown_taxa, known_taxa, by = "taxon")
+unique_unknown
+
+```
+
+We can now visualise this information. **Will need to update plots not to show unknown.**
+
+Census data by population
+
+```{r}
+
+#Plot this
+## check what values actually exist:
+unique(nc_tally$NcType)
+
+ggplot(nc_tally, aes(x = NcType, y = n, fill = NcType)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  labs(
+    title = "Type of Census Data by Population",
+    x = "Nc Type",
+    y = "Number of Populations"
+  ) +
+  scale_fill_manual(values = c("Nc_range" = "#1f77b4", "Nc_point" = "#2ca02c")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+#Donut plot
+
+nc_tally$fraction <- nc_tally$n / sum(nc_tally$n)
+nc_tally$ymax <- cumsum(nc_tally$fraction)
+nc_tally$ymin <- c(0, head(nc_tally$ymax, n = -1))
+
+ggplot(nc_tally, aes(ymax = ymax, ymin = ymin, xmax = 4, xmin = 3, fill = NcType)) +
+  geom_rect() +
+  coord_polar(theta = "y") +
+  xlim(c(2, 4)) +
+  theme_void() +
+  scale_fill_manual(values = c("Nc_range" = "#1f77b4", "Nc_point" = "#2ca02c")) +
+  labs(title = "Proportion of Census Data Types")
+```
+
+
+**Ne** As was done for Nc data, we will take a closer look at the Ne data.
+
+```{r}
+#recall what the dat looks like in the ne_pops_exists colum
+head(kobo.cleaned$ne_pops_exists)
+
+```
+
+```{r}
+# Get all unique Ne values from all 25 population columns
+ne_cols <- paste0("Ne_pop", 1:25)
+```
+
+```{r}
+#filter for records where ne data is available
+kobo.cleaned %>%
+  filter(tolower(ne_pops_exists) == "ne_available") %>%
+  select(taxon, starts_with("Ne_pop")) 
+```
+
+```{r}
+# To calculate the number of populations with Ne data
+# Pivot only the Ne_pop columns
+ne_counts <-kobo.cleaned %>%
+  filter(tolower(ne_pops_exists) == "ne_available") %>%
+  select(taxon, all_of(ne_cols)) %>%
+  pivot_longer(cols = all_of(ne_cols), names_to = "population", values_to = "Ne_value") %>%
+  filter(!is.na(Ne_value) & Ne_value != "") %>%
+  summarise(n_Ne_pops = n())
+ne_counts 
+
+```
+
+Like was done with the Nc data, lets explore the populations by creating a list on the taxa and the populations
+```{r}
+Ne_pops <- kobo.cleaned %>%
+  filter(tolower(ne_pops_exists) == "ne_available") %>%
+  select(taxon, all_of(ne_cols)) %>%
+  pivot_longer(cols = all_of(ne_cols), names_to = "pop", values_to = "Ne")
+
+Ne_pops %>%
+  filter(!is.na(Ne)) %>%       # Keep only rows where Ne value is present
+  select(taxon, pop, Ne) %>%   # Select relevant columns
+  arrange(taxon, pop)
+```
+
+Below will list the unique taxa from the list above.
+```{r}
+taxa_ne <- Ne_pops %>%
+  filter(!is.na(Ne)) %>%       # Keep only rows where Ne value is present
+  select(taxon, pop, Ne) %>%   # Select relevant columns
+  arrange(taxon, pop) %>%
+  distinct(taxon)
+
+taxa_ne
+``` 
+Now to compare the lists of Nc and Ne taxa and only show and count the unique ones. This is a check to make sure the same counts appear as in the preliminary checks 
+```{r}
+#Taxa only in Nc (not in Ne):
+anti_join(taxa_nc, taxa_ne, by = "taxon")
+```
+
+```{r}
+#Taxa only in Ne (not in Nc):
+anti_join(taxa_ne, taxa_nc, by = "taxon")
+```
+
+```{r}
+#Taxa present in both:
+inner_join(taxa_nc, taxa_ne, by = "taxon")
+```
+
+```{r}
+#Creates a list of unique taxa with pop size data
+bind_rows(
+  mutate(taxa_nc, source = "Nc"),
+  mutate(taxa_ne, source = "Ne")
+) %>%
+  group_by(taxon) %>%
+  summarise(source = paste(sort(unique(source)), collapse = ", ")) %>%
+  arrange(taxon)
+
+##Lists 136 taxa.
+```
+
+**Visual of Ne and Nc data Availability** To visualize the number of Ne, Nc Point, and NC Range populations, we can create a stacked or grouped bar plot showing this breakdown per taxon or as overall counts. 
+
+```{r}
+###Prepare a combined data set
+# Step 1: Prepare Nc categories
+nc_total <- nc_tally %>%
+  rename(category = NcType) %>%  # If your count table has Nc_category
+  mutate(type = "Nc")                 # Label as census
+
+# Step 2: Prepare Ne as a single row
+ne_total <- ne_counts %>%
+  summarise(n = sum(n_Ne_pops, na.rm = TRUE)) %>%  # Count total Ne populations
+  mutate(category = "Ne", type = "Ne")    # Label and match format
+
+# Step 3: Combine both tables
+combined_data <- bind_rows(nc_total, ne_total) %>%
+  select(type, category, n) %>%
+  arrange(type, desc(n))  # Optional: sort for readability
+
+# View combined table
+combined_data
+```
+
+
+## 4. Calculating the PM indicator  
+
+### 4.1 Extracting the relevant information
+From the kobo.cleaned dataset discard the records where n_extinct_populations and  n_extant_populations is NA. 
+```{r}
+###Creates a new dataset with records having NA in (n_extant_populations) OR (n_extinct_populations)
+
+PM_data <- kobo.cleaned %>%
+  filter(!(is.na(n_extinct_populations) | is.na(n_extant_populations)))
+```
+
+Show the most relevant columns used to calculate the PM indicator:
+
+```{r}
+PM_data %>% 
+  select(taxon, n_extant_populations, n_extinct_populations) %>%
+  head()
+
+
+```
+
+### 4.2 Calculating the PM indicator for each taxon
+
+The PM indicator is the proportion of populations within species that are maintained (still existing). This is estimated by dividing the number of existing populations over all known populations for the species (extant + extinct). A proportional value between 0 and 1 is generated for each taxa.
+
+```{r}
+PM_data$indicator_PM<- PM_data$n_extant_populations / (PM_data$n_extant_populations + PM_data$n_extinct_populations)
+
+```
+
+
+### 4.3 Calculating a national PM indicator value
+
+Once individual PM indicator values have been generated they can be averaged according to various criteria. In particular, an average PM value is needed per taxonomic group before an overall national metric can be quantified. The taxonomic averages are necessary to account or differences in species numbers within each group.
+
+```{r}
+avg_PM_by_taxonomic_group <- PM_data %>%
+  group_by(taxonomic_group) %>%
+  summarise(
+    avg_indicator_PM = mean(indicator_PM, na.rm = TRUE),sd_indicator_PM  = sd(indicator_PM, na.rm = TRUE),
+    n = sum(!is.na(indicator_PM)),
+    se_indicator_PM  = sd_indicator_PM / sqrt(n),
+    n = n())  %>% # optional: shows number of rows per taxon
+  group_split(taxonomic_group) %>%
+  setNames(unique(PM_data$taxonomic_group))
+
+avg_PM_by_taxonomic_group
+```
+
+```{r}
+#creates a table of the results
+knitr::kable(avg_PM_by_taxonomic_group, caption = "Average PM by Taxonomic Group")  
+
+PM_data %>%
+  filter(taxon == "Lycaon pictus") %>%
+  select(taxon ,n_extant_populations, n_extinct_populations)
+```
+**Exploring ranges of PM indicator**
+
+```{r}
+PM_threshold_summary <- PM_data %>%
+  group_by(taxonomic_group) %>%
+  summarise(
+    n_total = sum(!is.na(indicator_PM)),
+    n_PM_lt_0.75  = sum(indicator_PM < 0.75, na.rm = TRUE),
+    n_PM_lt_0.25 = sum(indicator_PM < 0.25, na.rm = TRUE),
+    prop_PM_lt_0.75  = n_PM_lt_0.75 / n_total,
+    prop_PM_lt_0.25 = n_PM_lt_0.25 / n_total,
+    .groups = "drop"
+  )
+
+PM_threshold_summary
+```
+
+```{r}
+pm_rank_plot <- PM_data %>%
+  filter(!is.na(indicator_PM)) %>%
+  arrange(indicator_PM) %>%
+  mutate(rank = row_number()) %>%
+  ggplot(aes(x = rank, y = indicator_PM)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = c(0.75, 0.25), linetype = "dashed") +
+  labs(
+    x = "Taxa (ranked)",
+    y = "Populations Maintained indicator value"
+  ) +
+  theme_minimal()
+
+pm_rank_plot
+
+```
+
+### 4.4 Breaking down the PM indicator by different categories
+
+The following code will enable us to explore whether there are any differences in indicator values based on different criteria, such as taxonomic order, endemism, threat status and more.
+
+#### 4.4.1 Exploring differences in Mammal Orders
+
+```{r}
+avg_PM_by_Order <- PM_data %>%
+  group_by(Taxonomic_Order) %>%
+  summarise(
+    avg_indicator_PM = mean(indicator_PM, na.rm = TRUE),
+    sd_indicator_PM  = sd(indicator_PM, na.rm = TRUE),
+    n = sum(!is.na(indicator_PM)),
+    se_indicator_PM  = sd_indicator_PM / sqrt(n),
+    n = n(),
+    .groups = "drop"
+  )
+
+avg_PM_by_Order
+
+kruskal.test(indicator_PM ~ Taxonomic_Order, data = PM_data)
+
+#creates a table of the results, if needed
+knitr::kable(avg_PM_by_Order, caption = "Average PM by Taxonomic Order") 
+```
+
+#### 4.4.2 Exploring PM differences in Endemism
+
+Need to create a new column in the dataset acknowledging the overall species as a national endemic (i.e., taxa with no transboundary populations and where it is indicated taxa for species as a whole is a national endemic)
+
+
+
+```{r}
+avg_PM_by_endemism <- PM_data %>%
+  group_by(endemic_status) %>%
+  summarise(
+    avg_indicator_PM = mean(indicator_PM, na.rm = TRUE),
+    sd_indicator_PM  = sd(indicator_PM, na.rm = TRUE),
+    n = sum(!is.na(indicator_PM)),
+    se_indicator_PM  = sd_indicator_PM / sqrt(n),
+    n = n(),
+    .groups = "drop"
+  )
+
+avg_PM_by_endemism
+```
+
+```{r}
+wilcox.test(
+  indicator_PM ~ endemic_status,
+  data = PM_data,
+  exact = FALSE
+)
+
+#creates a table of the results, if needed
+knitr::kable(avg_PM_by_endemism, caption = "Average PM by Endemism") 
+```
+
+#### 4.4.3 Exploring PM differences in Threat Status
+
+```{r}
+avg_PM_by_threat_status <- PM_data %>%
+  group_by(Current_National_Red_List_Category) %>%
+  summarise(
+    avg_indicator_PM = mean(indicator_PM, na.rm = TRUE),
+    sd_indicator_PM  = sd(indicator_PM, na.rm = TRUE),
+    n = n(),
+    se_indicator_PM  = sd_indicator_PM / sqrt(n),
+    n = n(),
+    .groups = "drop"
+  )
+
+avg_PM_by_threat_status
+```
+
+```{r}
+kruskal.test(indicator_PM ~ Current_National_Red_List_Category, data = PM_data)
+
+PM_data %>%
+  kruskal_effsize(indicator_PM ~ Current_National_Red_List_Category)
+
+# Dunn's post hoc test with Holm correction
+dunn_results <- PM_data %>%
+  dunn_test(indicator_PM ~ Current_National_Red_List_Category, p.adjust.method = "holm")
+
+# View results
+dunn_results
+
+```
+
+```{r}
+# Ensure reproducible jitter
+set.seed(123)
+
+# Define IUCN order (bottom = LC, top = RE)
+iucn_levels <- c(
+  "least_concern__lc",
+  "near_threatened__nt",
+  "vulnerable__vu",
+  "endangered__en",
+  "critically_endangered__cr",
+  "data_deficient__dd",
+  "regionally_extinct__re"
+)
+
+# Prepare plotting data
+plot_data <- PM_data %>%
+  mutate(
+    Current_National_Red_List_Category = factor(
+      Current_National_Red_List_Category,
+      levels = iucn_levels
+    )
+  )
+
+# Define colours (include RE)
+iucn_colors <- c(
+  "least_concern__lc" = "#9ACD32",
+  "near_threatened__nt" = "#FFFF99",
+  "vulnerable__vu" = "#FFA500",
+  "endangered__en" = "#FF4500",
+  "critically_endangered__cr" = "#B22222",
+  "data_deficient__dd" = "#A9A9A9",
+  "regionally_extinct__re" = "#000000"
+)
+
+# Short labels
+iucn_labels <- c(
+  "least_concern__lc" = "LC",
+  "near_threatened__nt" = "NT",
+  "vulnerable__vu" = "VU",
+  "endangered__en" = "EN",
+  "critically_endangered__cr" = "CR",
+  "data_deficient__dd" = "DD",
+  "regionally_extinct__re" = "RE"
+)
+
+# Sample sizes for labels
+label_counts <- tibble(
+  Current_National_Red_List_Category = iucn_levels
+) %>%
+  left_join(
+    plot_data %>% count(Current_National_Red_List_Category),
+    by = "Current_National_Red_List_Category"
+  ) %>%
+  mutate(
+    n = replace_na(n, 0),
+    label = paste0(iucn_labels[Current_National_Red_List_Category], " (n=", n, ")")
+  )
+
+# Create named vector for y-axis labels with sample sizes
+y_labels_with_n <- setNames(label_counts$label, label_counts$Current_National_Red_List_Category)
+
+p_pm <- ggplot(
+  plot_data,
+  aes(
+    y = Current_National_Red_List_Category,
+    x = indicator_PM
+  )
+) +
+  geom_jitter(
+    height = 0.15,
+    width = 0,
+    size = 1.8,
+    alpha = 0.6
+  ) +
+  stat_summary(
+    fun = median,
+    geom = "point",
+    size = 4,
+    shape = 95   # horizontal line
+  ) +
+  scale_y_discrete(labels = y_labels_with_n) +  # apply labels with n
+  scale_x_continuous(limits = c(0, 1)) +
+  labs(
+    x = "Populations Maintained indicator value",
+    y = "Regional IUCN Red List categories"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10)
+  )
+
+# Print plot
+p_pm
+
+```
+
+#### 4.4.4 Exploring PM differences in Realm
+
+```{r}
+avg_PM_by_realm <- PM_data %>%   
+  group_by(realm) %>%   
+  summarise(
+    avg_indicator_PM = mean(indicator_PM, na.rm = TRUE),
+    sd_indicator_PM  = sd(indicator_PM, na.rm = TRUE),
+    n = sum(!is.na(indicator_PM)),
+    se_indicator_PM  = sd_indicator_PM / sqrt(n),
+    n = n(),
+    .groups = "drop"   
+  )  
+
+avg_PM_by_realm
+
+kruskal.test(
+  indicator_PM ~ realm,
+  data = PM_data
+)
+
+PM_data %>%
+  kruskal_effsize(indicator_PM ~ realm)
+
+dunn_realm <- PM_data %>%
+  dunn_test(indicator_PM ~ realm, p.adjust.method = "BH")
+
+dunn_realm
+
+#creates a table of the results, if needed 
+knitr::kable(avg_PM_by_realm, caption = "Average PM by Realm")   
+
+#To save as a separate file 
+#write.csv(avg_PM_by_realm, "avg_PM_by_realm.csv", row.names = FALSE)
+```
+
+Want to query the records associated with freshwater terrestrial & marine terrestrial species.
+
+```{r}
+unique(PM_data$realm)
+
+realm_query <- PM_data %>%
+  filter(realm %in% c("marine terrestrial", "freshwater terrestrial")) %>%
+  select(Taxonomic_Order, taxon, common_name, realm)
+
+realm_query
+
+write.csv(realm_query, "Realm_queries.csv", row.names = FALSE)
+```
+
+#### 4.4.5 Exploring differences in historical and current populations
+```{r}
+#Create population change direction
+
+PM_data <- PM_data %>%
+  mutate(
+    # Only calculate if historical population count exists
+    pop_change_direction = case_when(
+      !is.na(n_hist_pops) & !is.na(n_extant_populations) & n_extant_populations > n_hist_pops ~ "increase",
+      !is.na(n_hist_pops) & !is.na(n_extant_populations) & n_extant_populations < n_hist_pops ~ "decrease",
+      !is.na(n_hist_pops) & !is.na(n_extant_populations) & n_extant_populations == n_hist_pops ~ "no_change",
+      TRUE ~ NA_character_  # unknown
+    )
+  )
+
+# Coverage summary
+coverage_summary <- PM_data %>%
+  summarise(
+    total_taxa = n(),
+    taxa_with_diff_data = sum(!is.na(pop_change_direction)),
+    taxa_without_diff_data = total_taxa - taxa_with_diff_data,
+    prop_with_data = taxa_with_diff_data / total_taxa
+  )
+
+coverage_summary # 13 taxa have data
+
+# Count by population change direction
+pop_change_counts <- PM_data %>%
+  filter(!is.na(pop_change_direction)) %>%
+  count(pop_change_direction) %>%
+  mutate(percent = n / sum(n) * 100)
+
+pop_change_counts
+
+```
+
+Here is a list of the species with historical and current population number information:
+
+```{r}
+pop_change_taxa_list <- PM_data %>%
+  filter(!is.na(pop_change_direction)) %>%
+  select(
+    taxon,   
+    pop_change_direction,
+    Current_National_Red_List_Category
+  ) %>%
+  arrange(pop_change_direction, Current_National_Red_List_Category)
+
+pop_change_taxa_list
+
+```
+## 5. Calculating the Ne 500 indicator
+
+### 5.1 Extracting the relevant information
+From the kobo.cleaned dataset discard the records where there is no population size data. In other words, where size data either exists for the population or species as a whole.
+
+```{r}
+#Creates a new dataset with only taxa with size data
+Ne500_data <- kobo.cleaned %>%
+  mutate(popsize_data = tolower(popsize_data)) %>%
+  filter(
+    popsize_data %in% c("yes", "data_for_species")
+      )
+
+#Check how many rows match popsize_data == "yes" or "data_for_species"
+Ne500_data %>%
+  count(popsize_data)
+
+```
+
+The questions asked for size data available for the species as a whole and for individual populations differed, so we will need to inspect the two categories separately.
+
+### 5.2 Census data for species as a whole
+```{r}
+# Filter for data_for_species and count nc_type_sp values
+Ne500_sp <- Ne500_data %>%
+  filter(
+    tolower(popsize_data) == "data_for_species"
+  )
+
+Ne500_sp %>%
+  count(nc_type_sp)
+
+```
+
+We need to convert the categorical range values into number. So we create a function to do this step by step.
+
+```{r}
+range_conversion <- function(x) {
+  dplyr::case_when(
+    x == "more_5000_bymuch"    ~ 10000,
+    x == "more_5000"           ~ 5500,
+    x == "less_5000_bymuch"    ~ 500,
+    x == "less_5000"           ~ 4500,
+    x == "range_includes_5000" ~ 5001,
+    TRUE                       ~ NA_real_
+  )
+}
+```
+Then add additional columns with a converted Nc range value and another accounting combining the point and range census values for the species. 
+```{r}
+
+Ne500_sp <-Ne500_sp %>%
+  mutate(
+    nc_sp_range_value = range_conversion(nc_range_sp), #Create a new column with 
+    #Create a unified census column using point OR range data for the species
+    sp_census_value = coalesce(nc_point_sp, nc_sp_range_value)
+  ) 
+
+Ne500_sp%>%
+  select(taxon, nc_type_sp, nc_point_sp, nc_range_sp, nc_sp_range_value,
+         sp_census_value)
+```
+####5.2.1 Accounting for transboundary species
+```{r}
+    #Apply transboundary adjustment
+Ne500_sp<-Ne500_sp %>%
+  mutate(
+    sp_census_adjusted = case_when(
+      national_endemic == "no" &
+      popsize_data == "data_for_species" &
+      sp_whole_or_part == "only_sa" ~ sp_census_value / (sa_percent / 100),
+      TRUE ~ sp_census_value
+    ),
+    nc_adjusted = if_else(sp_census_adjusted != sp_census_value,
+                          "Nc_expanded", "Nc_not_expanded")
+  )
+
+Ne500_sp %>%
+  select(taxon,national_endemic,sp_whole_or_part,nc_point_sp,nc_range_sp,nc_sp_range_value,sp_census_value,sp_census_adjusted,nc_adjusted)
+```
+####5.2.2 Converting Nc to Ne
+Now, that all point and census has been adjusted for the transboundary nature of the species, we can convert census data to Ne using the different conversion ratios.
+```{r}
+#Converts census to Ne
+Ne500_sp <- Ne500_sp %>%
+  mutate(
+    sp_Ne_from_Nc_0.1 = sp_census_adjusted * 0.1,
+    sp_Ne_from_Nc_0.2 = sp_census_adjusted * 0.2,
+    sp_Ne_from_Nc_0.3 = sp_census_adjusted * 0.3
+  ) 
+
+Ne500_sp %>%
+select(taxon, nc_type_sp, national_endemic,sp_whole_or_part,sp_census_adjusted, sp_Ne_from_Nc_0.1, sp_Ne_from_Nc_0.2, sp_Ne_from_Nc_0.3, Taxonomic_Order, realm, national_endemic, Previous_National_Red_List_Category, Current_National_Red_List_Category,
+  IUCN_habitat, species_range)
+
+```
+
+##### 5.2.2.1 Teasing out Ne < 500
+While the indicator calculations are done at the population level, if we know entire populations have an estimated Ne below 500, it is fair to assume that if these species showed structure, their Ne values would likely be even lower. So we an include these species as part of our downstream indicator calculations
+
+```{r}
+lowNe_sp <- Ne500_sp %>%
+  filter(sp_Ne_from_Nc_0.1 < 500)
+  
+lowNe_sp %>%
+    select(
+    taxon,
+    sp_Ne_from_Nc_0.1,
+    sp_Ne_from_Nc_0.2,
+    sp_Ne_from_Nc_0.3,
+    Taxonomic_Order,
+    realm,
+    endemic_status,
+    Previous_National_Red_List_Category,
+    Current_National_Red_List_Category,
+    IUCN_habitat,
+    species_range
+  )
+```
+Even if there are multiple populations within each, we can treat it as a single population to calculate an indicator value since the whole species is less that Ne 500; therefore all populations within it would also be below Ne500.
+
+```{r}
+#### Not sure this should be done here.
+##Adding indicator value columns
+lowNe_sp <- lowNe_sp %>%
+  mutate(
+   sp_indicator_0.1 = ifelse(!is.na(sp_Ne_from_Nc_0.1) & sp_Ne_from_Nc_0.1 > 500, 1, 0),
+   sp_indicator_0.2 = ifelse(!is.na(sp_Ne_from_Nc_0.2) & sp_Ne_from_Nc_0.2 > 500, 1, 0),
+   sp_indicator_0.3 = ifelse(!is.na(sp_Ne_from_Nc_0.3) & sp_Ne_from_Nc_0.3 > 500, 1, 0)
+  )
+
+lowNe_sp %>%
+  select(taxon, taxonomic_group,sp_census_adjusted, sp_Ne_from_Nc_0.1, sp_indicator_0.1,sp_indicator_0.2, sp_indicator_0.3)
+```
+
+### 5.3 Census data for individual populations 
+Before going into the census data, let's recap what data is available for popsize_data = "yes"
+
+```{r}
+#Categories under popsize_data = "yes"
+Ne500_pop<-Ne500_data  %>%
+  filter(tolower(popsize_data) == "yes") 
+  
+Ne500_pop %>%  
+  count(endemic_status,ne_pops_exists, nc_pops_exists, sort = TRUE)
+
+```
+
+Before working through the data, we need to define the population columns
+```{r}
+# Population-level columns
+Nc_type_cols       <- paste0("NcType_pop", 1:25)      # Type of size data: "Ne", "Nc_point", "Nc_range"
+Nc_point_cols      <- paste0("NcPoint_pop", 1:25)     # Point estimates of population size
+Nc_range_cols      <- paste0("NcRange_pop", 1:25)     # Range estimates of population size
+transboundary_cols <- paste0("transboundary_pop", 1:25) # Yes/No flag for transboundary populations
+percent_cols     <- paste0("percent_pop", 1:25) # % of pop in SA (if transboundary)
+```
+
+As we did for the species, we need to Convert census range to numeric values for each population using the range_conversion function noted in 5.2
+```{r}
+Ne500_pop <- Ne500_data %>%
+  filter(popsize_data == "yes") %>%
+  mutate(across(all_of(Nc_range_cols), ~ range_conversion(.x), .names = "{.col}_num"))
+
+# ---- Inspect changes  ----
+Ne500_pop %>%
+  select(taxon, starts_with("NcType_pop"), starts_with("NcRange_pop"), 
+         ends_with("_num"))
+```
+
+The code below combines point and range census data into a numeric census_value column for each population per taxon
+```{r}
+#Combine point and range into a numeric census_value per population
+
+for(i in 1:25) {
+  point_col <- Nc_point_cols[i]
+  range_num_col <- paste0(Nc_range_cols[i], "_num")
+  census_col <- paste0("census_pop", i)
+  
+  Ne500_pop <- Ne500_pop %>%
+    mutate("{census_col}" := coalesce(.data[[point_col]], .data[[range_num_col]]))
+}
+
+# ---- Inspect changes without losing columns ----
+Ne500_pop %>%
+  select(taxon, starts_with("NcType_pop"), starts_with("NcRange_pop"), 
+         ends_with("_num"), starts_with("census_pop"))
+
+```
+
+
+#### 5.3.1 Accounting for transboundary populations
+We now need to make adjustments per population depending if it is transboundary (also exists outside of South Africa). For populations where the size is for the population as a whole adjustments are not needed.
+
+```{r} 
+for(i in 1:25) {
+  census_col       <- paste0("census_pop", i)
+  transboundary_col <- transboundary_cols[i]
+  sa_col           <- percent_cols[i]
+  percent_col      <- paste0("percent_pop", i)
+  adjusted_col <- paste0("census_adjusted_pop", i)
+
+#Create a new column (census_adjusted_pop) that calculates the full Nc for transboundary populations based on the percent of the pop in SA  
+  Ne500_pop <- Ne500_pop %>%
+    mutate(
+      "{adjusted_col}" := case_when(
+        .data[[transboundary_col]] == "yes_transboundary" & !is.na(.data[[percent_col]]) & .data[[percent_col]] > 0 ~
+          .data[[census_col]] / (.data[[percent_col]] / 100),
+        TRUE ~ .data[[census_col]]
+      )
+    )
+}
+```
+
+```{r}
+##Defining column name vectors
+whole_or_part_cols <- paste0("whole_or_part_pop", 1:25)
+
+#Apply adjustment per population
+for (i in 1:25) {
+
+  census_col        <- paste0("census_pop", i)
+  adjusted_col      <- paste0("census_adjusted_pop", i)
+  transboundary_col <- transboundary_cols[i]
+  percent_col       <- percent_cols[i]
+  whole_or_part_col <- whole_or_part_cols[i]
+
+  Ne500_pop <- Ne500_pop %>%
+    mutate(
+      "{adjusted_col}" := case_when(
+        .data[[transboundary_col]] == "yes_transboundary" &
+        .data[[whole_or_part_col]] == "only_sa" &
+        !is.na(.data[[percent_col]]) &
+        .data[[percent_col]] > 0
+        ~ .data[[census_col]] / (.data[[percent_col]] / 100),
+        TRUE ~ .data[[census_col]]
+      )
+    )
+}
+
+```
+
+```{r}
+  ###SANITY CHECK: 
+##Specifically checking for a species where the census value was for the whole pop and therefore did not need adjusting
+  Ne500_pop %>%
+  filter(taxon == "Balaenoptera musculus intermedia") %>%
+  select(
+    taxon,
+    starts_with("census_pop"),
+    starts_with("percent_pop"),
+    starts_with("whole_or_parts_pop"),
+    starts_with("census_adjusted_pop")
+  )
+
+#Other check for adjustments when pop is not transboundary or where an adjustment should have happened
+Ne500_pop %>%
+  select(
+    taxon,
+    transboundary_pop1,
+    whole_or_part_pop1,
+    percent_pop1,
+    census_pop1,
+    census_adjusted_pop1
+  ) %>%
+  mutate(
+    adjusted_applied = if_else(census_pop1 != census_adjusted_pop1, TRUE, FALSE)
+  )
+```
+
+#### 5.3.2 Converting population Nc to Ne
+Now that we have the correct census sizes for each population, we can calculate Ne using the same conversion ratios as in 5.2.2
+```{r}
+for (i in 1:25) {
+  adjusted_col <- paste0("census_adjusted_pop", i)
+  
+  Ne500_pop <- Ne500_pop %>%
+    mutate(
+      "{paste0('pop_Ne_from_Nc_0.1_', i)}" := .data[[adjusted_col]] * 0.1,
+      "{paste0('pop_Ne_from_Nc_0.2_', i)}" := .data[[adjusted_col]] * 0.2,
+      "{paste0('pop_Ne_from_Nc_0.3_', i)}" := .data[[adjusted_col]] * 0.3
+    )
+}
+
+#### Inspect that the columns were added correctly.
+Ne500_pop %>%
+  select(taxon, census_adjusted_pop1, pop_Ne_from_Nc_0.1_1, pop_Ne_from_Nc_0.2_1, pop_Ne_from_Nc_0.3_1) %>%
+  head()
+```
+
+### 5.4 Effective population size data for individual populations
+Some populations have Ne data instead of or in addition to census data. In such cases, the Ne data should take precedent.
+
+```{r}
+for(i in 1:25) {
+  census_col <- paste0("census_adjusted_pop", i)
+  Ne_col     <- paste0("Ne_pop", i)   # assuming these columns exist
+  Ne01_col   <- paste0("final_Ne_pop", i, "_0.1")
+  Ne02_col   <- paste0("final_Ne_pop", i, "_0.2")
+  Ne03_col   <- paste0("final_Ne_pop", i, "_0.3")
+  
+  #The coalesce() function chooses Ne_pop[1-25] if it’s not NA, overriding the Nc calculating from the census values; otherwise it uses the Nc-derived estimate.
+  Ne500_pop <- Ne500_pop %>%
+    mutate(
+      "{Ne01_col}" := coalesce(.data[[Ne_col]], .data[[census_col]] * 0.1),
+      "{Ne02_col}" := coalesce(.data[[Ne_col]], .data[[census_col]] * 0.2),
+      "{Ne03_col}" := coalesce(.data[[Ne_col]], .data[[census_col]] * 0.3)
+    )
+}
+
+####Inspect for correctness
+Ne500_pop %>%
+  select(taxon, Current_National_Red_List_Category, census_adjusted_pop1, Ne_pop1,
+         final_Ne_pop1_0.1, final_Ne_pop1_0.2, final_Ne_pop1_0.3)
+
+```
+
+**Taxa with both size estimates**`
+```{r}
+taxa_pop_both <- Ne500_pop %>%
+  select(taxon, matches("^Ne_pop\\d+$"), matches("^census_adjusted_pop\\d+$")) %>%
+  pivot_longer(
+    cols = -taxon,
+    names_to = c(".value", "pop"),
+    names_pattern = "(Ne_pop|census_adjusted_pop)(\\d+)"
+  ) %>%
+  filter(!is.na(Ne_pop) & !is.na(census_adjusted_pop)) %>%
+  arrange(taxon, as.integer(pop))
+
+taxa_pop_both
+```
+
+### 5.5 Transforming the Ne500 dataset to process indicator values
+```{r}
+
+Ne500_long <- Ne500_pop %>%
+  pivot_longer(
+    cols = starts_with("final_Ne_pop"), 
+    names_to = c("pop_id", "Ne_ratio"), 
+    names_pattern = "final_Ne_pop(\\d+)_(0\\.\\d+)", 
+    values_to = "Ne_value"
+  ) %>%
+  filter(!is.na(Ne_value))   # keep only populations with data
+
+Ne500_long %>%
+  select(taxon, Ne_ratio, Ne_value, national_endemic, sp_whole_or_part, percent_pop1:percent_pop25, everything())
+
+```
+
+Consider extinct populations as part of the Ne500 indicator calculation
+```{r}
+# Create rows for extinct populations
+extinct_pops_long <- Ne500_long %>%
+  distinct(taxon, Ne_ratio,
+           taxonomic_group, Taxonomic_Order, endemic_status,
+           Previous_National_Red_List_Category,
+           Current_National_Red_List_Category,
+           IUCN_habitat, species_range,
+           n_extinct_populations) %>%
+  filter(!is.na(n_extinct_populations), n_extinct_populations > 0) %>%
+  uncount(n_extinct_populations, .remove = FALSE) %>%  # repeat rows
+  mutate(
+    Ne_value = 0,
+    pop_status = "extinct"
+  )
+```
+
+Combine the extinct and extant data
+```{r}
+Ne500_long_full <- Ne500_long %>%
+  mutate(pop_status = "extant") %>%
+  bind_rows(extinct_pops_long)
+
+```  
+
+```{r}
+Ne500_per_taxa <- Ne500_long_full %>%
+  group_by(taxon, Ne_ratio) %>%
+  #List the categories (columns) you want to keep in this dataset
+  summarise(
+    taxonomic_group  = first(taxonomic_group),
+    Taxonomic_Order   = first(Taxonomic_Order),
+    endemic_status  = first(endemic_status),
+    realm = first(realm),
+    Previous_National_Red_List_Category = first(Previous_National_Red_List_Category),
+    Current_National_Red_List_Category  = first(Current_National_Red_List_Category),
+    IUCN_habitat      = first(IUCN_habitat),
+    species_range     = first(species_range),
+    n_pops            = n(),
+    n_above_500       = sum(Ne_value >= 500, na.rm = TRUE),
+    prop_above_500    = n_above_500 / n_pops,
+    .groups = "drop"
+  )
+Ne500_per_taxa
+```
+
+SANITY CHECK: effect of extinct populations on the Ne500 indicator
+```{r}
+#Calculate the indicator without extinct populations
+Ne500_per_taxa_no_extinct <- Ne500_long %>%
+  group_by(taxon, Ne_ratio) %>%
+  summarise(
+    n_pops_no_extinct      = n(),
+    n_above_500_no_extinct = sum(Ne_value >= 500, na.rm = TRUE),
+    prop_above_500_no_extinct = n_above_500_no_extinct / n_pops_no_extinct,
+    .groups = "drop"
+  )
+
+#Calculate the indicator with extinct populations included (using Ne500_long_full from earlier)
+Ne500_per_taxa_with_extinct <- Ne500_long_full %>%
+  group_by(taxon, Ne_ratio) %>%
+  summarise(
+    n_pops_with_extinct      = n(),
+    n_above_500_with_extinct = sum(Ne_value >= 500, na.rm = TRUE),
+    prop_above_500_with_extinct = n_above_500_with_extinct / n_pops_with_extinct,
+    .groups = "drop"
+  )
+
+#Join and compare the two versions
+Ne500_comparison <- Ne500_per_taxa_no_extinct %>%
+  left_join(
+    Ne500_per_taxa_with_extinct,
+    by = c("taxon", "Ne_ratio")
+  ) %>%
+  mutate(
+    delta_prop = prop_above_500_with_extinct - prop_above_500_no_extinct,
+    indicator_changed = prop_above_500_with_extinct != prop_above_500_no_extinct
+  )
+
+#Summarise the impact: how are taxa affected?
+Ne500_comparison %>%
+  summarise(
+    n_taxa_total   = n_distinct(taxon),
+    n_taxa_changed = sum(indicator_changed, na.rm = TRUE)
+  )
+#12 rows changed, but this is only 4 taxa which seems strange
+
+#Direction and magnitude of change
+Ne500_comparison %>%
+  filter(indicator_changed) %>%
+  summarise(
+    mean_change   = mean(delta_prop, na.rm = TRUE),
+    median_change = median(delta_prop, na.rm = TRUE),
+    min_change    = min(delta_prop, na.rm = TRUE),
+    max_change    = max(delta_prop, na.rm = TRUE)
+  )
+
+#Inspect taxa that are affected
+Ne500_comparison %>%
+  filter(indicator_changed) %>%
+  arrange(delta_prop) %>%
+  select(
+    taxon,
+    Ne_ratio,
+    n_pops_no_extinct,
+    n_pops_with_extinct,
+    prop_above_500_no_extinct,
+    prop_above_500_with_extinct,
+    delta_prop
+  )
+```
+
+Because only 4 taxa are showing a change, I want to check if the other 6 taxa with extinct populations have been incorporated or not. It could be that they simply didn't change the indicator score.
+```{r}
+taxa_with_extinct <- kobo.cleaned %>%
+  filter(n_extinct_populations > 0) %>%
+  distinct(taxon, n_extinct_populations)
+
+taxa_in_pop_indicator <- Ne500_long %>%
+  distinct(taxon)
+
+#Compare the two
+taxa_with_extinct %>%
+  mutate(in_indicator = taxon %in% taxa_in_pop_indicator$taxon)
+```
+
+```{r}
+#Reorganize dataset with each taxon in a single row.
+Ne500_per_taxa_wide <- Ne500_per_taxa %>%
+  pivot_wider(
+    id_cols = c(taxon, taxonomic_group,endemic_status, Taxonomic_Order, realm,
+                Previous_National_Red_List_Category, Current_National_Red_List_Category,
+                IUCN_habitat, species_range),  # metadata columns to keep
+    names_from = Ne_ratio,               # the ratio column (0.1, 0.2, 0.3)
+    values_from = prop_above_500,       # or your chosen indicator column
+    names_prefix = "pop_indicator_"          # creates indicator_0.1, indicator_0.2, etc
+  )
+
+Ne500_per_taxa_wide 
+```
+
+```{r}
+#Combine the species and population datasets
+combined_Ne500_indicators <- bind_rows(
+  Ne500_per_taxa_wide,  # 136 population-level taxa
+  lowNe_sp %>%
+    select(
+      taxon,
+      taxonomic_group,
+      endemic_status,
+      Taxonomic_Order,
+      realm,
+      Previous_National_Red_List_Category,
+      Current_National_Red_List_Category,
+      IUCN_habitat,
+      species_range,
+      sp_indicator_0.1,
+      sp_indicator_0.2,
+      sp_indicator_0.3
+    ) 
+  )
+
+  #Create a indicator column that has values either from pop level or species level data 
+combined_Ne500_indicators <- combined_Ne500_indicators %>%
+  mutate(
+    indicator_0.1 = coalesce(sp_indicator_0.1, pop_indicator_0.1),
+    indicator_0.2 = coalesce(sp_indicator_0.2, pop_indicator_0.2),
+    indicator_0.3 = coalesce(sp_indicator_0.3, pop_indicator_0.3)
+  )  
+## Inspect the dataset
+combined_Ne500_indicators
+
+```
+
+### 5.6 Calculating a national Ne500 indicator value
+
+First, calculate average values per taxonomic group (e.g., mammals, etc)
+```{r}
+avg_Ne500_by_taxonomic_group <- combined_Ne500_indicators %>%
+  group_by(taxonomic_group) %>%
+  summarise(
+    n_taxa = n(),
+    avg_indicator_0.1 = mean(indicator_0.1, na.rm = TRUE),
+    sd_indicator_0.1 = sd(indicator_0.1, na.rm = TRUE),
+    se_indicator_0.1 = sd(indicator_0.1, na.rm = TRUE)/sqrt(n()),
+    
+    avg_indicator_0.2 = mean(indicator_0.2, na.rm = TRUE),
+    sd_indicator_0.2 = sd(indicator_0.2, na.rm = TRUE),
+    se_indicator_0.2 = sd(indicator_0.2, na.rm = TRUE)/sqrt(n()),
+
+    avg_indicator_0.3 = mean(indicator_0.3, na.rm = TRUE),
+    sd_indicator_0.3 = sd(indicator_0.3, na.rm = TRUE),
+    se_indicator_0.3 = sd(indicator_0.3, na.rm = TRUE)/sqrt(n()),
+    .groups = "drop"
+  )
+
+avg_Ne500_by_taxonomic_group 
+
+```
+
+
+
+To calculate a national value, the average of each taxonomic groups indicator values must be averaged.
+
+
+```{r}
+nat_Ne500_indicator <- avg_Ne500_by_taxonomic_group %>%
+  summarise(
+    national_avg_0.1 = mean(avg_indicator_0.1, na.rm = TRUE),
+    national_avg_0.2 = mean(avg_indicator_0.2, na.rm = TRUE),
+    national_avg_0.3 = mean(avg_indicator_0.3, na.rm = TRUE)
+  )
+
+nat_Ne500_indicator
+
+```
+
+**Exploring the rank and thresholds for Ne500**
+```{r}
+Ne500_threshold_summary <- combined_Ne500_indicators %>%
+  summarise(
+    # Total number of taxa
+    n_total = sum(!is.na(indicator_0.1)),
+    
+    # Number of taxa with < 75% populations above Ne 500
+    n_Ne500_lt_0.75_0.1 = sum(indicator_0.1 < 0.75, na.rm = TRUE),
+    n_Ne500_lt_0.25_0.1 = sum(indicator_0.1 < 0.25, na.rm = TRUE),
+    
+    n_Ne500_lt_0.75_0.2 = sum(indicator_0.2 < 0.75, na.rm = TRUE),
+    n_Ne500_lt_0.25_0.2 = sum(indicator_0.2 < 0.25, na.rm = TRUE),
+    
+    n_Ne500_lt_0.75_0.3 = sum(indicator_0.3 < 0.75, na.rm = TRUE),
+    n_Ne500_lt_0.25_0.3 = sum(indicator_0.3 < 0.25, na.rm = TRUE),
+    
+    # Proportions
+    prop_Ne500_lt_0.75_0.1 = n_Ne500_lt_0.75_0.1 / n_total,
+    prop_Ne500_lt_0.25_0.1 = n_Ne500_lt_0.25_0.1 / n_total,
+    
+    prop_Ne500_lt_0.75_0.2 = n_Ne500_lt_0.75_0.2 / n_total,
+    prop_Ne500_lt_0.25_0.2 = n_Ne500_lt_0.25_0.2 / n_total,
+    
+    prop_Ne500_lt_0.75_0.3 = n_Ne500_lt_0.75_0.3 / n_total,
+    prop_Ne500_lt_0.25_0.3 = n_Ne500_lt_0.25_0.3 / n_total
+  )
+
+
+Ne500_threshold_summary
+
+```
+
+```{r}
+Ne500_categories_table <- combined_Ne500_indicators %>%
+  select(taxon, indicator_0.1, indicator_0.2, indicator_0.3) %>%
+  mutate(
+    category_0.1 = case_when(
+      indicator_0.1 < 0.25 ~ "<0.25",
+      indicator_0.1 < 0.75 ~ "<0.75",
+      TRUE ~ ">=0.75"
+    ),
+    category_0.2 = case_when(
+      indicator_0.2 < 0.25 ~ "<0.25",
+      indicator_0.2 < 0.75 ~ "<0.75",
+      TRUE ~ ">=0.75"
+    ),
+    category_0.3 = case_when(
+      indicator_0.3 < 0.25 ~ "<0.25",
+      indicator_0.3 < 0.75 ~ "<0.75",
+      TRUE ~ ">=0.75"
+    )
+  )
+
+```
+
+```{r}
+library(patchwork)  # for stacking panels
+
+# Panel a: Ne/Nc = 0.1
+p1 <- combined_Ne500_indicators %>%
+  ggplot(aes(x = 1, y = indicator_0.1)) +
+  geom_jitter(width = 0.2, height = 0, size = 2, alpha = 0.6, color = "black") +
+  geom_hline(yintercept = 0.25, linetype = "dashed", color = "grey30") +
+  geom_hline(yintercept = 0.75, linetype = "dashed", color = "grey30") +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  labs(y = NULL, x = NULL) +
+  ggtitle("a) Ne/Nc = 0.1") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+# Panel b: Ne/Nc = 0.2
+p2 <- combined_Ne500_indicators %>%
+  ggplot(aes(x = 1, y = indicator_0.2)) +
+  geom_jitter(width = 0.2, height = 0, size = 2, alpha = 0.6, shape = 15, color = "black") +
+  geom_hline(yintercept = 0.25, linetype = "dashed", color = "grey30") +
+  geom_hline(yintercept = 0.75, linetype = "dashed", color = "grey30") +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  labs(y = "Proportion of populations with Ne > 500", x = NULL) +
+  ggtitle("b) Ne/Nc = 0.2") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+# Panel c: Ne/Nc = 0.3
+p3 <- combined_Ne500_indicators %>%
+  ggplot(aes(x = 1, y = indicator_0.3)) +
+  geom_jitter(width = 0.2, height = 0, size = 2, alpha = 0.6, shape = 17, color = "black") +
+  geom_hline(yintercept = 0.25, linetype = "dashed", color = "grey30") +
+  geom_hline(yintercept = 0.75, linetype = "dashed", color = "grey30") +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  labs(y = NULL, x = "Mammal Taxa") +
+  ggtitle("b) Ne/Nc = 0.3") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+# Combine panels vertically
+Ne500_spread <- (p1 / p2 / p3) + plot_layout(ncol = 1)
+
+```
+
+### 5.7 Breaking down the Ne500 indicator by different categories
+The following code will enable us to explore whether there are any differences in indicator values based on different criteria, such as taxonomic order, endemism, threat status and more.
+
+#### 5.7.1 Exploring Ne 500 differences in Order
+```{r}
+avg_by_group_order <- combined_Ne500_indicators %>%
+  group_by(taxonomic_group, Taxonomic_Order) %>%
+  summarise(
+    n_taxa = n(),  # number of taxa in this group/order
+    across(
+      starts_with("indicator_"),
+      list(
+        mean = ~ mean(.x, na.rm = TRUE),
+        sd   = ~ sd(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    ),
+    .groups = "drop"
+  )
+
+avg_by_group_order
+
+
+```
+
+```{r}
+##Exploring significance in Taxonomic Order
+library(rstatix)
+
+# Kruskal-Wallis test per ratio
+# Ne/Nc = 0.1
+kruskal_0.1 <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.1 ~ Taxonomic_Order)
+
+kruskal_0.1
+
+# Ne/Nc = 0.2
+kruskal_0.2 <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.2 ~ Taxonomic_Order)
+kruskal_0.2
+
+# Ne/Nc = 0.3
+kruskal_0.3 <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.3 ~ Taxonomic_Order)
+kruskal_0.3
+
+
+# Ne/Nc = 0.1
+dunn_0.1 <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.1 ~ Taxonomic_Order, p.adjust.method = "holm")
+dunn_0.1 
+
+# Export Ne/Nc = 0.1
+write.csv(dunn_0.1, "Dunn_Ne500_0.1.csv")
+
+# Ne/Nc = 0.2
+dunn_0.2 <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.2 ~ Taxonomic_Order, p.adjust.method = "holm")
+dunn_0.2
+
+# Ne/Nc = 0.3
+dunn_0.3 <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.3 ~ Taxonomic_Order, p.adjust.method = "holm")
+dunn_0.3
+
+```
+
+#### 5.7.2 Exploring Ne 500 differences in Endemism 
+
+```{r}
+Ne500_byEndemism <- combined_Ne500_indicators %>%
+  group_by(endemic_status) %>%
+  summarise(
+    n_taxa = n(),
+
+    avg_indicator_0.1 = mean(indicator_0.1, na.rm = TRUE),
+    sd_indicator_0.1  = sd(indicator_0.1, na.rm = TRUE),
+
+    avg_indicator_0.2 = mean(indicator_0.2, na.rm = TRUE),
+    sd_indicator_0.2  = sd(indicator_0.2, na.rm = TRUE),
+
+    avg_indicator_0.3 = mean(indicator_0.3, na.rm = TRUE),
+    sd_indicator_0.3  = sd(indicator_0.3, na.rm = TRUE),
+
+    .groups = "drop"
+  )
+
+Ne500_byEndemism
+```
+
+```{r}
+#Investigating statstical significance of differences.
+
+wilcox_0.1 <- wilcox.test(
+  indicator_0.1 ~ endemic_status,
+  data = combined_Ne500_indicators
+)
+wilcox_0.1
+
+wilcox_0.2 <- wilcox.test(
+  indicator_0.2 ~ endemic_status,
+  data = combined_Ne500_indicators
+)
+wilcox_0.2
+
+wilcox_0.3 <- wilcox.test(
+  indicator_0.3 ~ endemic_status,
+  data = combined_Ne500_indicators
+)
+wilcox_0.3
+```
+
+```{r}
+#Plotting endemism
+# Filter and prepare data
+plot_data <- combined_Ne500_indicators %>%
+  filter(!is.na(endemic_status), !is.na(indicator_0.1))
+
+# Define colors (optional)
+status_colors <- c(
+  "endemic" = "#FF4500",      # orange-red
+  "non_endemic" = "#9ACD32"   # green
+)
+
+# Compute sample sizes for labels
+label_counts <- plot_data %>%
+  count(endemic_status) %>%
+  mutate(label = paste0(endemic_status, " (n=", n, ")"))
+
+# Create a named vector for scale_y_discrete
+y_labels <- setNames(label_counts$label, label_counts$endemic_status)
+
+
+# Create horizontal violin plot
+ggplot(plot_data, aes(
+    y = endemic_status,
+    x = indicator_0.1,
+    fill = endemic_status
+  )) +
+  geom_violin(scale = "width", trim = FALSE, color = NA, alpha = 0.8) +
+  geom_jitter(height = 0.1, size = 1.8, alpha = 0.6, color = "black") +
+  scale_fill_manual(values = status_colors) +
+  scale_y_discrete(labels = y_labels) +
+  scale_x_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Distribution of Ne500 Indicator by Endemism",
+    x = "Proportion of populations with Ne > 500",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10),
+    plot.title = element_text(size = 13)
+  )
+```
+
+```{r}
+proportion_lowNe_endemism <- combined_Ne500_indicators %>%
+  filter(!is.na(endemic_status), !is.na(indicator_0.1)) %>%
+  group_by(endemic_status) %>%
+  summarise(
+    n_taxa = n(),
+    n_below_0.5 = sum(indicator_0.3 < 0.5, na.rm = TRUE),
+    prop_below_0.5 = n_below_0.5 / n_taxa,
+    .groups = "drop"
+  )
+
+proportion_lowNe_endemism
+```
+#### 5.7.3 Exploring Ne 500 differences in Realm
+```{r}
+Ne500_byRealm <- combined_Ne500_indicators %>%
+  group_by(realm) %>%
+  summarise(
+    n_taxa = n(),
+
+    avg_indicator_0.1 = mean(indicator_0.1, na.rm = TRUE),
+    sd_indicator_0.1  = sd(indicator_0.1, na.rm = TRUE),
+
+    avg_indicator_0.2 = mean(indicator_0.2, na.rm = TRUE),
+    sd_indicator_0.2  = sd(indicator_0.2, na.rm = TRUE),
+
+    avg_indicator_0.3 = mean(indicator_0.3, na.rm = TRUE),
+    sd_indicator_0.3  = sd(indicator_0.3, na.rm = TRUE),
+
+    .groups = "drop"
+  )
+
+Ne500_byRealm
+
+#Inspecting the taxa that make up the joint realms
+combined_Ne500_indicators %>% 
+    filter(realm == "marine terrestrial") %>%
+  select(taxon)
+```
+```{r}
+#Examining statistical significance between realms
+# Ne/Nc = 0.1
+kruskal_0.1_realm <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.1 ~ realm)
+
+kruskal_0.1_realm
+
+# Ne/Nc = 0.2
+kruskal_0.2_realm <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.2 ~ realm)
+kruskal_0.2_realm
+
+# Ne/Nc = 0.3
+kruskal_0.3_realm <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.3 ~ realm)
+kruskal_0.3_realm
+```
+
+#### 5.7.4 Exploring Ne 500 differences in Threat Status
+```{r}
+Ne500_byThreat <- combined_Ne500_indicators %>%
+  group_by(Current_National_Red_List_Category) %>%
+  summarise(
+    n_taxa = n(),
+
+    avg_indicator_0.1 = mean(indicator_0.1, na.rm = TRUE),
+    sd_indicator_0.1  = sd(indicator_0.1, na.rm = TRUE),
+
+    avg_indicator_0.2 = mean(indicator_0.2, na.rm = TRUE),
+    sd_indicator_0.2  = sd(indicator_0.2, na.rm = TRUE),
+
+    avg_indicator_0.3 = mean(indicator_0.3, na.rm = TRUE),
+    sd_indicator_0.3  = sd(indicator_0.3, na.rm = TRUE),
+
+    .groups = "drop"
+  )
+Ne500_byThreat
+
+```
+
+```{r}
+##Exploring significance in Threat Status
+
+# Kruskal-Wallis test per ratio
+# Ne/Nc = 0.1
+kruskal_0.1_threat <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.1 ~ Current_National_Red_List_Category)
+
+kruskal_0.1_threat
+
+# Ne/Nc = 0.2
+kruskal_0.2_threat <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.2 ~ Current_National_Red_List_Category)
+kruskal_0.2_threat
+
+# Ne/Nc = 0.3
+kruskal_0.3_threat <- combined_Ne500_indicators %>%
+  kruskal_test(indicator_0.3 ~ Current_National_Red_List_Category)
+kruskal_0.3_threat
+
+```
+```{r}
+##Post hoc test
+# Ne/Nc = 0.1
+dunn_0.1_threat <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.1 ~ Current_National_Red_List_Category, p.adjust.method = "holm")
+dunn_0.1_threat
+
+# Ne/Nc = 0.2
+dunn_0.2_threat <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.2 ~ Current_National_Red_List_Category, p.adjust.method = "holm")
+dunn_0.2_threat
+
+# Ne/Nc = 0.3
+dunn_0.3_threat <- combined_Ne500_indicators %>%
+  dunn_test(indicator_0.3 ~ Current_National_Red_List_Category, p.adjust.method = "holm")
+dunn_0.3_threat
+
+```
+
+```{r}
+proportion_low_indicator_RL <- combined_Ne500_indicators %>%
+  filter(!is.na(Current_National_Red_List_Category), !is.na(indicator_0.1)) %>%
+  group_by(Current_National_Red_List_Category) %>%
+  summarise(
+    n_taxa = n(),
+    n_below_0.25 = sum(indicator_0.1 < 0.25, na.rm = TRUE),
+    prop_below_0.25 = n_below_0.25 / n_taxa,
+    .groups = "drop"
+  )
+
+proportion_low_indicator_RL
+```
+
+
+```{r}
+taxa_low_indicator_RL <- combined_Ne500_indicators %>%
+  filter(Current_National_Red_List_Category %in% c(
+    "least_concern__lc",
+    "near_threatened__nt",
+    "vulnerable__vu",
+    "data_deficient__dd"
+  ),
+  !is.na(indicator_0.3),
+  indicator_0.3 < 0.75) %>%
+  select(taxon, Current_National_Red_List_Category, indicator_0.3)
+
+taxa_low_indicator_RL %>%
+  arrange(Current_National_Red_List_Category)
+
+```
+
+**Visualising the spread in individual indicator values**
+
+```{r}
+set.seed(123)
+
+# Define IUCN levels in desired order
+iucn_levels <- c(
+  "regionally_extinct__re",
+  "critically_endangered__cr",
+  "endangered__en",
+  "vulnerable__vu",
+  "near_threatened__nt",
+  "least_concern__lc",
+  "data_deficient__dd"
+)
+
+# Short labels for axis
+iucn_labels <- c(
+  "regionally_extinct__re" = "RE",
+  "critically_endangered__cr" = "CR",
+  "endangered__en" = "EN",
+  "vulnerable__vu" = "VU",
+  "near_threatened__nt" = "NT",
+  "least_concern__lc" = "LC",
+  "data_deficient__dd" = "DD"
+)
+
+# Colors
+iucn_colors <- c(
+  "regionally_extinct__re" = "black",
+  "critically_endangered__cr" = "#B22222",
+  "endangered__en" = "#FF4500",
+  "vulnerable__vu" = "#FFA500",
+  "near_threatened__nt" = "#FFFF99",
+  "least_concern__lc" = "#9ACD32",
+  "data_deficient__dd" = "#A9A9A9"
+)
+
+# Prepare plot data
+plot_data <- combined_Ne500_indicators %>%
+  filter(!is.na(indicator_0.1)) %>%
+  # Ensure all values are bounded 0-1
+  mutate(indicator_0.1 = pmin(pmax(indicator_0.1, 0), 1),
+         Current_National_Red_List_Category = factor(
+           Current_National_Red_List_Category,
+           levels = iucn_levels
+         ))
+
+# Calculate sample size labels
+label_counts <- tibble(Current_National_Red_List_Category = iucn_levels) %>%
+  left_join(plot_data %>% count(Current_National_Red_List_Category),
+            by = "Current_National_Red_List_Category") %>%
+  mutate(
+    n = replace_na(n, 0),
+    label = paste0(iucn_labels[Current_National_Red_List_Category], " (n=", n, ")")
+  )
+
+# Plot
+ne_threat_plot <- ggplot(plot_data, aes(
+  y = Current_National_Red_List_Category,
+  x = indicator_0.1,
+  fill = Current_National_Red_List_Category
+)) +
+  # Violins only for categories with >=2 points
+  geom_violin(
+    data = plot_data %>% group_by(Current_National_Red_List_Category) %>% filter(n() > 1),
+    scale = "width", trim = TRUE, color = NA, alpha = 0.8
+  ) +
+  # Jitter all points (including singletons)
+  geom_jitter(width = 0.05, size = 1.8, alpha = 0.6, color = "black") +
+  # Y-axis with sample size labels
+  scale_y_discrete(
+    limits = rev(iucn_levels),  # top-to-bottom order
+    labels = setNames(label_counts$label, iucn_levels)
+  ) +
+  scale_fill_manual(values = iucn_colors) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  labs(
+    title = "Distribution of Ne500 Indicator by Regional IUCN Threat Status",
+    x = "Proportion of populations within species with Ne > 500",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10),
+    plot.title = element_text(size = 13)
+  )
+
+ne_threat_plot
+
+```
+**Plotting the same plot for all ratios in a single figure**
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr) # for easy annotation if needed
+
+# Pivot ratios into long format
+plot_data_long <- combined_Ne500_indicators %>%
+  select(taxon, Current_National_Red_List_Category,
+         indicator_0.1, indicator_0.2, indicator_0.3) %>%
+  pivot_longer(
+    cols = starts_with("indicator_"),
+    names_to = "Ne_ratio",
+    values_to = "Ne_value"
+  ) %>%
+  filter(!is.na(Ne_value)) %>%
+  mutate(
+    # Bound values between 0 and 1
+    Ne_value = pmin(pmax(Ne_value, 0), 1),
+    Current_National_Red_List_Category = factor(
+      Current_National_Red_List_Category,
+      levels = iucn_levels
+    ),
+    Ne_ratio = factor(Ne_ratio, 
+                      levels = c("indicator_0.1","indicator_0.2","indicator_0.3"),
+                      labels = c("0.1", "0.2", "0.3"))
+  )
+
+# Sample size labels per category
+label_counts <- plot_data_long %>%
+  group_by(Current_National_Red_List_Category) %>%
+  summarize(n = n_distinct(taxon), .groups = "drop") %>%
+  mutate(label = paste0(iucn_labels[Current_National_Red_List_Category], " (n=", n, ")"))
+
+# Plot side-by-side panels
+ne_threat_plot_long <- ggplot(plot_data_long, aes(
+  y = Current_National_Red_List_Category,
+  x = Ne_value,
+  fill = Current_National_Red_List_Category
+)) +
+  geom_violin(
+    data = plot_data_long %>% group_by(Current_National_Red_List_Category, Ne_ratio) %>% filter(n() > 1),
+    scale = "width", trim = TRUE, color = NA, alpha = 0.8
+  ) +
+  geom_jitter(width = 0.05, size = 1.8, alpha = 0.6, color = "black") +
+  scale_y_discrete(
+    limits = rev(iucn_levels),
+    labels = setNames(label_counts$label, label_counts$Current_National_Red_List_Category)
+  ) +
+  scale_fill_manual(values = iucn_colors) +
+  scale_x_continuous(
+    limits = c(-0.07, 1.07),       # small buffer at ends
+    expand = expansion(mult = c(0, 0))
+  ) +
+  facet_wrap(~ Ne_ratio, ncol = 3, scales = "free_x", labeller = as_labeller(c("0.1" = "a) Ne/Nc = 0.1", "0.2" = "b) Ne/Nc = 0.2", "0.3" = "c) Ne/Nc = 0.3"))) +
+  labs(
+    title = NULL,
+    x = "Proportion of populations within species with Ne > 500",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10),
+    plot.title = element_text(size = 13)
+  )
+
+ne_threat_plot_long
+
+```
+
+```{r}
+##Visualising plot of Ne values for each population by threat status
+
+###Limited to Ne of 1500 therefore some sample points are cut off and not displayed. This was done to look at the key ranges of Ne that we are aiming for.
+library(dplyr)
+library(ggplot2)
+
+# Ensure reproducible jitter
+set.seed(123)
+
+# Filter and set factor levels
+iucn_levels <- c(
+  "critically_endangered__cr",
+  "endangered__en",
+  "vulnerable__vu",
+  "near_threatened__nt",
+  "least_concern__lc",
+  "data_deficient__dd"
+)
+
+plot_data <- Ne500_long %>%
+  filter(!is.na(Ne_value)) %>%
+  mutate(
+    Current_National_Red_List_Category = factor(
+      Current_National_Red_List_Category,
+      levels = rev(iucn_levels)  # CR top → DD bottom
+    )
+  )
+
+# Define colors
+iucn_colors <- c(
+  "least_concern__lc" = "#9ACD32",
+  "near_threatened__nt" = "#FFFF99",
+  "vulnerable__vu" = "#FFA500",
+  "endangered__en" = "#FF4500",
+  "critically_endangered__cr" = "#B22222",
+  "data_deficient__dd" = "#A9A9A9"
+)
+
+# Short labels
+iucn_labels <- c(
+  "least_concern__lc" = "LC",
+  "near_threatened__nt" = "NT",
+  "vulnerable__vu" = "VU",
+  "endangered__en" = "EN",
+  "critically_endangered__cr" = "CR",
+  "data_deficient__dd" = "DD"
+)
+
+# Sample sizes per category
+label_counts <- tibble(Current_National_Red_List_Category = rev(iucn_levels)) %>%
+  left_join(plot_data %>% count(Current_National_Red_List_Category), 
+            by = "Current_National_Red_List_Category") %>%
+  mutate(
+    n = replace_na(n, 0),
+    label = paste0(iucn_labels[Current_National_Red_List_Category], " (n=", n, ")")
+  )
+
+# Plot population-level Ne
+ggplot(plot_data, aes(
+    y = Current_National_Red_List_Category,
+    x = Ne_value,
+    fill = Current_National_Red_List_Category
+  )) +
+  # Violin for groups with >=2 populations
+  geom_violin(data = plot_data %>% group_by(Current_National_Red_List_Category) %>% filter(n() > 1),
+              aes(x = Ne_value, y = Current_National_Red_List_Category),
+              scale = "width", trim = FALSE, color = NA, alpha = 0.8) +
+  # Jitter for all populations including singletons
+  geom_jitter(width = 0.05, size = 1.8, alpha = 0.6, color = "black") +
+  scale_y_discrete(labels = setNames(label_counts$label, label_counts$Current_National_Red_List_Category)) +
+  scale_fill_manual(values = iucn_colors) +
+  scale_x_continuous(limits = c(0, 1500), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "Distribution of Population-level Ne by Regional IUCN Threat Status",
+    x = "Ne",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10),
+    plot.title = element_text(size = 13)
+  )
+```
+
+
+#### 5.7.5 Exploring Ne 500 differences in Distribution
+```{r}
+Ne500_byRange <- combined_Ne500_indicators %>%
+  group_by(species_range) %>%
+  summarise(
+    n_taxa = n(),
+
+    avg_indicator_0.1 = mean(indicator_0.1, na.rm = TRUE),
+    sd_indicator_0.1  = sd(indicator_0.1, na.rm = TRUE),
+
+    avg_indicator_0.2 = mean(indicator_0.2, na.rm = TRUE),
+    sd_indicator_0.2  = sd(indicator_0.2, na.rm = TRUE),
+
+    avg_indicator_0.3 = mean(indicator_0.3, na.rm = TRUE),
+    sd_indicator_0.3  = sd(indicator_0.3, na.rm = TRUE),
+
+    .groups = "drop"
+  )
+
+
+Ne500_byRange
+```
+
+
+
+## 6. Calculating the Genetic Monitoring Indicator
+A third genetic indicator is also available and can be quantified based on teh data collected. This genetic monitoring indicator quantifies the number of taxa that have been genetically monitored across time. This indicator was not adopted in the GBF, but can provide a good metric showing national progress in undertaking population and genetic research through time.
+
+```{r}
+taxa_monitored <- kobo.cleaned %>%
+  group_by(taxon) %>%
+  filter(temp_gen_monitoring == "yes") %>%
+  select(taxon, Taxonomic_Order, Current_National_Red_List_Category, source_genetic_studies)
+taxa_monitored
+```
+
+Even though genetic monitoring studies are likely to have been conducted for very few species if any for a given taxonomic group, genetic studies may still have been conducted for various taxa. Depending on the type of study conducted, one may be able to get an idea of what samples or data can be used to generate more information. 
+
+## 7. Exploring taxa where genetic datasets exist 
+**Taxa involved in phylogenetic research**
+Taxa listed here may have samples stored in biobanks that could be used to conduct more fine-scale population genetic studies
+```{r}
+phylo <-kobo.cleaned %>%
+  filter(gen_studies == "phylo" | gen_studies == "phylo_pop") %>%
+  select(taxon, gen_studies, Taxonomic_Order, source_genetic_studies)
+
+phylo
+```
+
+**Taxa involved in population genetic research**
+Taxa listed here may have datasets (e.g., microsatellite or SNP) that can be reanalysed to generate the necessary metrics to quantify the genetic indicators. It is advisable to search for the datasets online and/or contact corresponding and senior authors in an attempt to gain access to these datasets.
+```{r}
+popgen <-kobo.cleaned %>%
+  filter(gen_studies == "pop" | gen_studies == "phylo_pop") %>%
+  select(taxon, gen_studies, Taxonomic_Order, Current_National_Red_List_Category, endemic_status, popsize_data, ne_pops_exists)
+
+popgen
+```
+
+Which taxa have had population genetic studies, and reported Ne
+```{r}
+popgen %>%
+  filter(ne_pops_exists == "ne_available") %>%
+  select(taxon,Taxonomic_Order,endemic_status, Current_National_Red_List_Category)
+
+
+```
+
+**Record session information for reproducibility purposes**
+
+```{r}
+sessionInfo()
+```
+
+## Technical documentation
+
+The last section of your page should contain links to technical documentation of the indicators and analyses presented on your page. Technical documentation can be in a variety of formats. It is not necessary to have all these in place, but there should at least be a technical report available in a public document repository (e.g. OPUS) or a published paper describing your methods. Edit and adapt the suggested layout below depending on what technical documentation is applicable to your page.
+
+## References
+
+<!--# Recommended citation is not capturing surnames correctly. Silva, J M da-->
+
+<div>
+
+</div>
+
+:::::
