@@ -58,64 +58,78 @@ Once all data have been compiled, export the Kobo dataset as a **CSV** with “v
 
 The analysis is organised into a sequence of phases. Each phase is documented in the Quarto file and implemented in a corresponding R script for users who want to run or adapt parts of the pipeline.
 
-### 3.1 Data export and import (Section 1; `01_import_data.R`)
+### 3.1 Data import (Section 1; `01_data_import.R`)
 
-- Import the Kobo CSV into R (e.g. using `read.csv` with the appropriate separator).  
-- Verify that key fields (assessor name, genus, species, taxonomic order, validation status, etc.) are present and correctly read.  
-- Filter to the focal taxonomic group (e.g. mammals) and create convenience fields (e.g. a combined `taxon` column for genus–species–subspecies).
+- Import the Kobo CSV into R (currently via `read.csv` with comma-separated input).  
+- Inspect the dataset structure and verify that core fields are present and correctly read, including assessor name, genus, species, taxonomic order, and validation status.  
+- Filter the dataset to the focal taxonomic group and exclude records not approved for analysis.  
+- Create a combined `taxon` field from genus, species, and subspecies/variety entries.  
+- Derive an `endemic_status` field using species-level endemicity fields and population-level transboundary information.
 
 ### 3.2 Quality checks (Section 2; `02_quality_checks.R`)
 
-- Identify and summarise missing or inconsistent values in critical fields (taxon names, taxonomic group, population counts, etc.).  
-- Flag records with potential issues and export a CSV listing these cases so assessors can revise or confirm them.  
-- Remove records flagged as “not approved” and create a cleaned dataset for indicator estimation.
+- Standardise key numeric population fields by converting placeholder values such as `-999` to missing values and coercing them to integer format.  
+- Trim whitespace and convert empty strings to `NA` across character fields.  
+- Flag records with potential problems, including suspicious population counts, missing required metadata, unusual taxon name formatting, ambiguous “other” population definitions, and missing extant/extinct population values.  
+- Summarise population-count distributions and inspect records with extinct populations or inconsistencies between historical and current population counts.  
+- Export a CSV of flagged records for checking and produce a cleaned dataset (`kobo.cleaned`) for downstream analyses.
 
-### 3.3 Calculating the PM indicator (Section 3; `03_pm_indicator.R`)
+### 3.3 Data exploration (Section 3; `03_data_exploration.R`)
 
-- Derive historical and current numbers of populations per taxon from the Kobo responses.  
-- Compute the proportion of populations maintained (PM) for each taxon and summarise across taxa.  
-- Explore PM variation by Red List categories, realms, endemism status, and other attributes; generate summary tables and figures used in the manuscript.
+- Summarise whether assessments are at species or subspecies level.  
+- Quantify completeness of extant and extinct population-count data across taxa.  
+- Explore how assessors defined populations and tabulate common definition types.  
+- Summarise the availability of population-size data (`popsize_data`), including species-level versus population-level information.  
+- Generate diagnostic tables and figures showing data availability across taxonomic orders, Red List categories, and realms, and compare availability of `Ne` and `Nc` data.
 
-### 3.4 Calculating the Ne 500 indicator (Section 5; `04_ne500_indicator.R`)
+### 3.4 Calculating the PM indicator (Section 4; `04_PM_indicator.R`)
 
-- Subset records with available population size data at species or population level.  
-- Convert categorical census ranges to numeric values and unify point and range estimates.  
-- Adjust census estimates for transboundary species (e.g. scaling to account for the proportion of the population in South Africa).  
-- Convert census size (Nc) to Ne using multiple Nc:Ne ratios and compute the proportion of populations with Ne > 500.  
-- Identify species whose overall Ne is < 500 and treat them appropriately when computing the indicator.
+- Subset taxa with both extant and extinct population counts available.  
+- Calculate the Populations Maintained (PM) indicator for each taxon as the proportion of extant populations relative to total known extant plus extinct populations.  
+- Summarise PM values by taxonomic group and evaluate threshold-based summaries (e.g. taxa below 0.75 or 0.25).  
+- Test for differences in PM across taxonomic orders, endemism status, Red List categories, and realms.  
+- Generate manuscript-ready tables and figures, including ranked PM plots, Red List comparisons, and summaries of historical versus current population change.
 
-### 3.5 Additional outputs (Section 4 and others; `05_additional_analyses.R`)
+### 3.5 Calculating the Ne 500 indicator (Section 5; `05_Ne500_indicator.R`)
 
-- Generate plots and tables illustrating indicator values by Red List category, realm, and other groupings.  
-- Produce diagnostic summaries, such as coverage of historical vs current population data or lists of taxa with specific data combinations.
+- Subset taxa with species-level or population-level census size data.  
+- Convert categorical census-size ranges into numeric values and combine range- and point-based census estimates.  
+- Adjust census values for transboundary taxa where only the South African fraction of the population was reported.  
+- Convert census size (`Nc`) to effective population size (`Ne`) using alternative `Ne:Nc` ratios (0.1, 0.2, and 0.3), while prioritising directly supplied `Ne` values where available.  
+- Reshape population-level estimates into long format, incorporate extinct populations as `Ne = 0`, and calculate the proportion of populations with `Ne > 500` for each taxon.  
+- Combine species-level and population-level results, summarise national indicator values, test for differences across Red List categories, and generate tables and figures for the manuscript.
 
 ## 4. How to run the pipeline
 
 ### Option A: Run the Quarto document
 
-1. Place your exported Kobo CSV in the same directory as `genetic-indicator-code-3.qmd` or update the file path in the import section.  
-2. Open the qmd in RStudio (or another editor) and render to HTML.  
-3. Follow the sections in order; each one explains the purpose of the code and how intermediate objects feed into the indicators.
+1. Place your exported Kobo CSV in the same directory as the Quarto document, or update the file path in the data import section.  
+2. Open the `.qmd` file in RStudio (or another editor that supports Quarto) and render it to HTML.  
+3. Run the workflow sections in order, as each section builds on objects created earlier in the document.  
+4. Check that the input filename, focal taxonomic filter, and any output paths match your local setup before rendering.
 
 ### Option B: Run the modular R scripts
 
-1. Save your Kobo export into the project’s data directory (or update paths inside the scripts).  
+1. Save your Kobo export in the project directory, or update the input file path in `01_data_import.R`.  
 2. Run the scripts in order:
    ```r
-   source("R/01_import_data.R")
+   source("R/01_data_import.R")
    source("R/02_quality_checks.R")
-   source("R/03_pm_indicator.R")
-   source("R/04_ne500_indicator.R")
-   source("R/05_additional_analyses.R")
+   source("R/03_data_exploration.R")
+   source("R/04_PM_indicator.R")
+   source("R/05_Ne500_indicator.R")
    ```
-3. Adapt filters, thresholds, or indicator summaries to match your focal taxon or national context.
-
+3. Note that later scripts depend on objects created earlier in the workflow: `02_quality_checks.R` requires `kobo.2` from `01_data_import.R`, while both `03_data_exploration.R`, `04_PM_indicator.R`, and `05_Ne500_indicator.R` use `kobo.cleaned` created in `02_quality_checks.R`.  
+4. Adapt the input filename, focal taxonomic filter, and any taxon-specific summaries or output paths to match your focal group or national context.
+   
 ## 5. Adapting the workflow
 
 The workflow is designed to be reusable for other taxa or countries:
 
-- Replace the input Kobo export with one from a different project while maintaining the same core structure.  
-- Modify or extend the quality checks to account for taxon-specific issues.  
-- Adjust Nc:Ne conversion assumptions or indicator reporting formats as needed.
+- Replace the input Kobo export with a dataset from a different project, while keeping the same overall field structure or adjusting the import step accordingly.  
+- Update the focal taxonomic filter in `01_data_import.R` to match the target group.  
+- Modify the quality checks in `02_quality_checks.R` to account for taxon- or project-specific issues.  
+- Extend the exploratory summaries in `03_data_exploration.R` if additional data-completeness diagnostics are useful.  
+- Adjust the PM and Ne500 indicator logic, including Nc:Ne conversion assumptions, threshold values, and reporting formats, to suit the study system and national context.  
 
 Users are encouraged to treat this repository as both a case study (mammals in South Africa) and a template for implementing the indicators in other contexts.
