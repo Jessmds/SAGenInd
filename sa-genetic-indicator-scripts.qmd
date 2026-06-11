@@ -2911,8 +2911,6 @@ The last section of your page should contain links to technical documentation of
 
 ## References
 
-<!--# Recommended citation is not capturing surnames correctly. Silva, J M da-->
-
 <div>
 
 </div>
