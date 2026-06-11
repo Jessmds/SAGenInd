@@ -19,9 +19,9 @@ Rendered HTML version of the Quarto document for users who prefer a web-based wa
 Modular R scripts corresponding to the main analysis phases described in the Quarto document. 
 - `R/01_import_data.R`  
 - `R/02_quality_checks.R`  
-- `R/03_pm_indicator.R`  
-- `R/04_ne500_indicator.R`  
-- `R/05_additional_analyses.R`  
+- `R/03_data_exploration.R`  
+- `R/04_PM_indicator.R`  
+- `R/05_Ne500_indicator.R`  
   
 Example Kobo data collection template and any ancillary data/lookup tables, as described below.
 
@@ -49,7 +49,7 @@ We built a Kobo form for collecting the needed raw data to estimate the Genetic 
 If you would like to start your own projects that can feed into this greater dataset, you can either contact Dr Jessica da Silva (j.dasilva@sanbi.org.za) to gain access to the project or **you can download the template file**, which is the .xlsx version of the Kobo form: 
 
 1. Download the existing template from [here](https://github.com/Jessmds/SAGenInd/blob/main/SA-Genetic-Indicator-Data-Collection-Form.csv)
-2. Import the .xlsx file into Kobotoolbox following [these instructions](https://support.kobotoolbox.org/new_form.html). Check [Kobotoolbox documentation](https://support.kobotoolbox.org/welcome.html) for further details on how to deploy and use it.
+2. Import the .xlsx file into Kobotoolbox following [these instructions](https://support.kobotoolbox.org/xlsform_with_kobotoolbox.html). Check [Kobotoolbox documentation](https://support.kobotoolbox.org/welcome.html) for further details on how to deploy and use it.
 
 
 Once all data have been compiled, export the Kobo dataset as a **CSV** with “values and headers” in **XML format**; this export option is required for the R code to recognise column names consistently.
